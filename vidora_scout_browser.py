@@ -18,7 +18,8 @@ Usage:
     python vidora_scout_browser.py --profile-id YOUR_ID --leads 20 --output leads.csv --grade-filter B
 """
 
-import os, sys, time, base64, json, csv, argparse, requests
+import os, sys, time, base64, json, csv, argparse, requests, getpass
+from hashlib import md5
 from pathlib import Path
 from datetime import datetime
 
@@ -44,9 +45,10 @@ SHORT_WAIT, MEDIUM_WAIT, LONG_WAIT = 2, 4, 6
 
 
 def signin(username, password):
+    hashed = md5(password.encode()).hexdigest()
     resp = requests.post(
         f"{MLX_API}/user/signin",
-        json={"credential": {"username": username, "password": password}},
+        json={"email": username, "password": hashed},
         headers={"Content-Type": "application/json", "Accept": "application/json"}
     )
     if resp.status_code != 200:
@@ -359,10 +361,14 @@ def main():
     ml_user = os.environ.get("ML_USERNAME")
     ml_pass = os.environ.get("ML_PASSWORD")
     api_key = os.environ.get("ANTHROPIC_API_KEY")
-    missing = [k for k,v in [("ML_USERNAME",ml_user),("ML_PASSWORD",ml_pass),("ANTHROPIC_API_KEY",api_key)] if not v]
-    if missing:
-        print(f"ERROR: Missing environment variables: {', '.join(missing)}")
-        sys.exit(1)
+
+    # If password not set or has special chars, prompt securely
+    if not ml_user:
+        ml_user = input("Multilogin email: ").strip()
+    if not ml_pass:
+        ml_pass = getpass.getpass("Multilogin password: ")
+    if not api_key:
+        api_key = input("Anthropic API key: ").strip()
 
     save_dir = Path(args.screenshots_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
