@@ -1,33 +1,25 @@
+# -*- coding: utf-8 -*-
 """
-Vidora Scout — Browser Version
---------------------------------
-Uses Multilogin browser profiles to browse Instagram on the web,
-screenshots creator profiles, analyses with Claude Vision,
-and exports scored leads to CSV.
-
-Requirements:
-    pip install anthropic requests selenium
-
-Environment variables needed:
-    ML_USERNAME=your@multilogin.com
-    ML_PASSWORD=yourpassword
-    ANTHROPIC_API_KEY=sk-ant-...
+Vidora Scout — Final Version
+------------------------------
+Connects to Multilogin, starts your IG browser profile,
+browses Instagram explore, screenshots creators, analyses
+with Claude Vision, exports scored leads to CSV.
 
 Usage:
-    python vidora_scout_browser.py --profile-id YOUR_ID --leads 20
-    python vidora_scout_browser.py --profile-id YOUR_ID --leads 20 --output leads.csv --grade-filter B
+    python vidora_scout_final.py --leads 5 --output leads.csv
 """
 
-import os, sys, time, base64, json, csv, argparse, requests, getpass
-from hashlib import md5
+import os, sys, time, base64, json, csv, argparse, requests, hashlib, urllib3
 from pathlib import Path
 from datetime import datetime
+
+urllib3.disable_warnings()
 
 try:
     from selenium import webdriver
     from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.chromium.options import ChromiumOptions
     from selenium.common.exceptions import TimeoutException
 except ImportError:
     print("ERROR: pip install selenium")
@@ -39,58 +31,63 @@ except ImportError:
     print("ERROR: pip install anthropic")
     sys.exit(1)
 
-MLX_API      = "https://api.multilogin.com"
-MLX_LAUNCHER = "https://launcher.mlx.yt:45001/api/v2"
-SHORT_WAIT, MEDIUM_WAIT, LONG_WAIT = 2, 4, 6
+# ── Your Multilogin config ──────────────────────────────────────────────────
+ML_EMAIL      = "innoviteecom@gmail.com"
+ML_PASS_FILE  = "C:/vidora/pass.txt"
+FOLDER_ID     = "3fcc8abd-1429-45ea-9383-1e71db538bc0"
+PROFILE_ID    = "440c4445-407b-48d9-bbd1-c8e203477c3d"
+MLX_API       = "https://api.multilogin.com"
+MLX_LAUNCHER  = "https://127.0.0.1:45001/api/v2"
+LOCALHOST     = "http://127.0.0.1"
+
+# ── Timings ─────────────────────────────────────────────────────────────────
+SHORT_WAIT, MEDIUM_WAIT, LONG_WAIT = 2, 4, 7
 
 
-def signin(username, password):
-    hashed = md5(password.encode()).hexdigest()
-    resp = requests.post(
-        f"{MLX_API}/user/signin",
-        json={"email": username, "password": hashed},
-        headers={"Content-Type": "application/json", "Accept": "application/json"}
-    )
-    if resp.status_code != 200:
-        raise Exception(f"Sign-in failed ({resp.status_code}): {resp.text}")
-    token = resp.json().get("data", {}).get("token")
-    if not token:
-        raise Exception("No token returned")
+def signin() -> str:
+    pw = open(ML_PASS_FILE).read().strip()
+    h = hashlib.md5(pw.encode()).hexdigest()
+    r = requests.post(f"{MLX_API}/user/signin",
+        json={"email": ML_EMAIL, "password": h},
+        headers={"Content-Type": "application/json", "Accept": "application/json"})
+    if r.status_code != 200:
+        raise Exception(f"Login failed: {r.text}")
+    token = r.json()["data"]["token"]
     print("  Multilogin: authenticated")
     return token
 
 
-def start_profile(profile_id, token):
-    resp = requests.get(
-        f"{MLX_LAUNCHER}/profile/start?profileId={profile_id}",
-        headers={"Authorization": f"Bearer {token}"}
+def start_profile(token: str) -> str:
+    r = requests.get(
+        f"{MLX_LAUNCHER}/profile/f/{FOLDER_ID}/p/{PROFILE_ID}/start?automation_type=selenium",
+        headers={"Accept": "application/json", "Authorization": f"Bearer {token}"},
+        verify=False
     )
-    if resp.status_code != 200:
-        raise Exception(f"Failed to start profile ({resp.status_code}): {resp.text}")
-    ws = resp.json().get("value", "")
-    if not ws:
-        raise Exception("No debug URL returned")
-    debug_address = ws.replace("ws://", "").split("/")[0]
-    print(f"  Profile started: {profile_id[:8]}...")
-    return debug_address
+    if r.status_code != 200:
+        raise Exception(f"Failed to start profile: {r.text}")
+    port = r.json()["data"]["port"]
+    print(f"  Profile started on port {port}")
+    return port
 
 
-def stop_profile(profile_id, token):
+def stop_profile(token: str):
     try:
         requests.get(
-            f"{MLX_LAUNCHER}/profile/stop?profileId={profile_id}",
-            headers={"Authorization": f"Bearer {token}"}
+            f"https://127.0.0.1:45001/api/v1/profile/stop/p/{PROFILE_ID}",
+            headers={"Accept": "application/json", "Authorization": f"Bearer {token}"},
+            verify=False
         )
         print("  Profile stopped")
     except Exception:
         pass
 
 
-def connect_driver(debug_address):
-    options = webdriver.ChromeOptions()
-    options.debugger_address = debug_address
-    driver = webdriver.Chrome(options=options)
-    driver.implicitly_wait(10)
+def connect_driver(port: str) -> webdriver.Remote:
+    options = ChromiumOptions()
+    driver = webdriver.Remote(
+        command_executor=f"{LOCALHOST}:{port}",
+        options=options
+    )
     print("  Selenium: connected")
     return driver
 
@@ -100,13 +97,13 @@ def check_logged_in(driver):
     time.sleep(LONG_WAIT)
     if "accounts/login" in driver.current_url:
         raise Exception(
-            "Not logged into Instagram.\n"
-            "Open your Multilogin profile manually, log into instagram.com, then run again."
+            "Not logged into Instagram on this profile.\n"
+            "Open Multilogin, start the IG 1 profile manually, log into instagram.com, then run again."
         )
     print("  Instagram: logged in")
 
 
-def collect_usernames(driver, limit):
+def collect_usernames(driver, limit: int) -> list:
     print(f"  Browsing explore — collecting up to {limit} creators...")
     driver.get("https://www.instagram.com/explore/")
     time.sleep(LONG_WAIT)
@@ -138,7 +135,7 @@ def collect_usernames(driver, limit):
     return result
 
 
-def screenshot_creator(driver, username, save_dir):
+def screenshot_creator(driver, username: str, save_dir: Path) -> list:
     profile_dir = save_dir / username
     profile_dir.mkdir(parents=True, exist_ok=True)
     shots = []
@@ -152,15 +149,13 @@ def screenshot_creator(driver, username, save_dir):
             or driver.current_url == "https://www.instagram.com/"
             or "/accounts/login" in driver.current_url
         ):
-            print(f"    @{username}: not accessible — skipping")
+            print(f"    @{username}: not accessible")
             return []
 
-        # Profile overview
         overview = profile_dir / "00_overview.png"
         driver.save_screenshot(str(overview))
         shots.append(overview)
 
-        # Individual posts
         post_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/p/']")
         clicked = 0
         for link in post_links[:8]:
@@ -185,7 +180,6 @@ def screenshot_creator(driver, username, save_dir):
                 except Exception:
                     pass
 
-        # Grab a Reel too if available
         reel_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/reel/']")
         if reel_links and clicked < 6:
             try:
@@ -239,40 +233,34 @@ Respond ONLY in this exact JSON (no markdown fences):
   "strengths": ["<strength 1>", "<strength 2>"],
   "personalised_pitch": "<3-4 sentence pitch>",
   "upgrade_potential": "<high/medium/low>",
-  "estimated_audience_size": "<small/mid/large — based on visible follower indicators>",
-  "sales_notes": "<internal notes — what angle to lead with>"
+  "estimated_audience_size": "<small/mid/large>",
+  "sales_notes": "<internal notes>"
 }}"""
 
 
-def analyse(username, shots, claude):
+def analyse(username: str, shots: list, claude) -> dict:
     if not shots:
         return None
-
     images = []
     for p in shots[:10]:
-        if not p.exists():
+        if not Path(p).exists():
             continue
-        ext = p.suffix.lower().lstrip(".")
+        ext = Path(p).suffix.lower().lstrip(".")
         mtype = "image/jpeg" if ext in ("jpg","jpeg") else "image/png"
         with open(p, "rb") as f:
             enc = base64.standard_b64encode(f.read()).decode()
         images.append({"type": "image", "source": {"type": "base64", "media_type": mtype, "data": enc}})
-
     if not images:
         return None
-
     content = images + [{"type": "text", "text": PROMPT.format(n=len(images), username=username)}]
     response = claude.messages.create(
         model="claude-opus-4-5",
         max_tokens=1200,
         messages=[{"role": "user", "content": content}]
     )
-
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
-        parts = raw.split("```")
-        raw = parts[1].lstrip("json").strip()
-
+        raw = raw.split("```")[1].lstrip("json").strip()
     result = json.loads(raw)
     result["username"] = username
     result["analysed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -283,16 +271,17 @@ def analyse(username, shots, claude):
 COLOURS = {"A": "\033[92m", "B": "\033[94m", "C": "\033[93m", "D": "\033[91m"}
 RESET = "\033[0m"
 
-def print_report(r):
+
+def print_report(r: dict):
     grade = r.get("lead_grade", "?")
     c = COLOURS.get(grade, "")
     print(f"\n{'='*62}")
     print(f"  @{r['username']}")
     print(f"  Grade: {c}{grade}{RESET}  Score: {r.get('overall_score')}/10  Priority: {'YES' if r.get('priority_flag') else 'No'}")
-    print(f"  Audience: {r.get('estimated_audience_size','?')}  Upgrade potential: {r.get('upgrade_potential','?')}")
+    print(f"  Audience: {r.get('estimated_audience_size','?')}  Upgrade: {r.get('upgrade_potential','?')}")
     print(f"{'─'*62}")
     scores = r.get("scores", {})
-    for key, label in [("lighting","Lighting"),("composition","Composition"),("editing_colour","Editing & colour"),("brand_consistency","Brand consistency"),("content_production","Production value"),("overall","Overall")]:
+    for key, label in [("lighting","Lighting"),("composition","Composition"),("editing_colour","Editing & colour"),("brand_consistency","Brand"),("content_production","Production"),("overall","Overall")]:
         s = scores.get(key, 0)
         print(f"  {label:<20} {'█'*s}{'░'*(10-s)}  {s}/10")
     print(f"\n  WEAKNESSES:")
@@ -314,7 +303,7 @@ def print_report(r):
     print()
 
 
-def export_csv(results, path):
+def export_csv(results: list, path: str):
     if not results:
         return
     fields = ["username","analysed_at","lead_grade","overall_score","priority_flag",
@@ -346,27 +335,19 @@ def export_csv(results, path):
                 "personalised_pitch": r.get("personalised_pitch"),
                 "sales_notes": r.get("sales_notes","")
             })
-    print(f"\n  Exported {len(results)} leads → {path}")
+    print(f"\n  Exported {len(results)} leads to {path}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Vidora Scout — Browser Edition")
-    parser.add_argument("--profile-id",      required=True)
+    parser = argparse.ArgumentParser(description="Vidora Scout")
     parser.add_argument("--leads",           type=int, default=10)
     parser.add_argument("--output",          default="leads.csv")
-    parser.add_argument("--screenshots-dir", default="./screenshots")
+    parser.add_argument("--screenshots-dir", default="C:/vidora/screenshots")
     parser.add_argument("--grade-filter",    default=None)
+    parser.add_argument("--api-key",         default=None)
     args = parser.parse_args()
 
-    ml_user = os.environ.get("ML_USERNAME")
-    ml_pass = os.environ.get("ML_PASSWORD")
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-
-    # If password not set or has special chars, prompt securely
-    if not ml_user:
-        ml_user = input("Multilogin email: ").strip()
-    if not ml_pass:
-        ml_pass = getpass.getpass("Multilogin password: ")
+    api_key = args.api_key or os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         api_key = input("Anthropic API key: ").strip()
 
@@ -377,22 +358,22 @@ def main():
     filter_grade = args.grade_filter.upper() if args.grade_filter else None
 
     print(f"\n{'='*50}")
-    print(f"  Vidora Scout — Browser Edition")
+    print(f"  Vidora Scout")
     print(f"  Target: {args.leads} creators")
     print(f"{'='*50}\n")
 
     print("Authenticating...")
-    token = signin(ml_user, ml_pass)
+    token = signin()
 
     print("Starting browser profile...")
-    debug_address = start_profile(args.profile_id, token)
+    port = start_profile(token)
     time.sleep(3)
 
     driver = None
     results = []
 
     try:
-        driver = connect_driver(debug_address)
+        driver = connect_driver(port)
         check_logged_in(driver)
         usernames = collect_usernames(driver, limit=args.leads)
 
@@ -422,7 +403,7 @@ def main():
         if driver:
             try: driver.quit()
             except Exception: pass
-        stop_profile(args.profile_id, token)
+        stop_profile(token)
 
     if results:
         export_csv(results, args.output)
