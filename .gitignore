@@ -1,0 +1,34 @@
+# Environment
+.env
+*.env
+
+# API keys — never commit these
+.anthropic_key
+
+# Screenshots and video frames — too large for git
+screenshots/
+video_frames/
+
+# Output data
+*.csv
+leads/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
