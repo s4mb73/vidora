@@ -42,6 +42,10 @@ class RunLogger:
         self.run_id = run_id
         self._buf = ""
 
+    def reconfigure(self, *args, **kwargs) -> None:
+        """No-op: vidora_scout_final calls sys.stdout.reconfigure() at import time."""
+        pass
+
     def write(self, chunk: str) -> int:
         if not chunk:
             return 0
