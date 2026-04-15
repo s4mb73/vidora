@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Run pipeline - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Run pipeline</h1>
+        <div class="subtitle">Launch the Multilogin &rarr; Instagram &rarr; Claude Vision scout.</div>
+    </div>
+    {% if active %}
+    <span class="running-indicator"><span class="pulse"></span> Run #{{ active.id }} in progress</span>
+    {% endif %}
+</div>
+
+<div class="grid-2">
+    <div class="panel">
+        <h2>Start a new run</h2>
+        {% if not has_api_key %}
+        <div class="flash error" style="margin-bottom:14px;">
+            Add your Anthropic API key in <a href="{{ url_for('settings_page') }}">Settings</a> before running.
+        </div>
+        {% endif %}
+        <form method="post">
+            <div class="form-group">
+                <label>Source mode</label>
+                <select name="source">
+                    <option value="maps">Maps — Google Places &rarr; Instagram match</option>
+                    <option value="explore">Explore — Instagram hashtags/explore</option>
+                </select>
+                <div class="form-hint">Maps mode finds real businesses on Google then locates their Instagram. Explore mode discovers creators directly on Instagram.</div>
+            </div>
+            <div class="form-group">
+                <label>Google Places query (Maps mode)</label>
+                <input type="text" name="query" value="dental clinic manchester" placeholder="e.g. hair salon manchester">
+                <div class="form-hint">What to search on Google Maps. Include the city in the query.</div>
+            </div>
+            <div class="form-group">
+                <label>Leads to collect</label>
+                <input type="number" name="leads" min="1" max="100" value="{{ default_leads }}">
+                <div class="form-hint">More leads = longer run time. Start with 3&ndash;5 for testing.</div>
+            </div>
+            <div class="form-group">
+                <label>Location (for scoring &amp; hashtags)</label>
+                <input type="text" name="location" value="{{ default_location }}" placeholder="e.g. manchester">
+                <div class="form-hint">Flags leads that match this city. Used for hashtags in Explore mode.</div>
+            </div>
+            <div class="form-group">
+                <label>One-off API key override (optional)</label>
+                <input type="password" name="api_key" placeholder="Leave empty to use saved key">
+                <div class="form-hint">Uses the saved key if this is empty.</div>
+            </div>
+            <div class="btn-group">
+                <button type="submit" class="btn primary" {{ 'disabled' if active else '' }}>
+                    {% if active %}Run in progress...{% else %}&#9654; Start run{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="panel">
+        <h2>How it works</h2>
+        <ol class="bullet-list">
+            <li>Authenticates with Multilogin and starts the configured browser profile.</li>
+            <li>Collects creator usernames from Instagram explore / location hashtags.</li>
+            <li>Screenshots each creator's profile and top posts.</li>
+            <li>Sends screenshots to Claude Vision for scoring and pitch generation.</li>
+            <li>Saves each lead to the database and renders a PDF audit.</li>
+        </ol>
+        <div class="divider"></div>
+        <div class="muted" style="font-size:12px;">
+            The scout is designed for Windows/Multilogin. If it cannot start on this
+            machine, the error will appear in the run log below.
+        </div>
+    </div>
+</div>
+
+{% if active %}
+<div class="panel">
+    <h2>Live log &middot; run #{{ active.id }}</h2>
+    <div class="log" id="live-log">{{ active.log or 'Starting up...' }}</div>
+    <div class="muted" style="font-size:11px; margin-top:8px;">
+        Auto-refreshing every 3 seconds.
+    </div>
+</div>
+{% endif %}
+
+<div class="panel">
+    <h2>Run history</h2>
+    {% if runs %}
+    <table class="data">
+        <thead>
+            <tr>
+                <th>#</th><th>Started</th><th>Finished</th>
+                <th>Location</th><th>Target</th><th>Found</th><th>Status</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in runs %}
+        <tr>
+            <td>#{{ r.id }}</td>
+            <td class="muted">{{ r.started_at }}</td>
+            <td class="muted">{{ r.finished_at or '-' }}</td>
+            <td>{{ r.location or '-' }}</td>
+            <td class="num">{{ r.leads_target }}</td>
+            <td class="num gold">{{ r.leads_found }}</td>
+            <td>
+                {% if r.status == 'running' %}
+                    <span class="running-indicator"><span class="pulse"></span> running</span>
+                {% elif r.status == 'success' %}
+                    <span class="badge" style="color:var(--green); border-color:var(--green);">success</span>
+                {% else %}
+                    <span class="badge" style="color:var(--red); border-color:var(--red);">{{ r.status }}</span>
+                {% endif %}
+            </td>
+            <td class="right"><a href="{{ url_for('run_detail', run_id=r.id) }}" class="muted">open &rarr;</a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">No runs yet. Start your first pipeline above.</div>
+    {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+{% if active %}
+<script>
+    // Auto refresh live log.
+    setTimeout(() => { window.location.reload(); }, 3000);
+</script>
+{% endif %}
+{% endblock %}

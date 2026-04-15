@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}@{{ lead.username }} - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <a href="{{ url_for('leads') }}" class="muted" style="font-size:12px;">&larr; All leads</a>
+        <div class="lead-head" style="margin-top:8px;">
+            <div>
+                <h1><span class="at">@</span>{{ lead.username }}
+                    <span class="grade {{ lead.lead_grade or 'unknown' }}" style="margin-left:8px; vertical-align:middle;">{{ lead.lead_grade or '?' }}</span>
+                </h1>
+                <div class="meta">
+                    {{ lead.business_type or 'unknown business' }}
+                    <span class="dot">&middot;</span>
+                    {{ lead.estimated_audience_size or '?' }} audience
+                    <span class="dot">&middot;</span>
+                    upgrade potential: {{ lead.upgrade_potential or '?' }}
+                    <span class="dot">&middot;</span>
+                    analysed {{ lead.analysed_at or '-' }}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="btn-group">
+        <a href="{{ url_for('lead_audit', lead_id=lead.id) }}" class="btn primary">&#8681; Download audit PDF</a>
+        <a href="https://instagram.com/{{ lead.username }}" target="_blank" rel="noopener" class="btn">View on Instagram</a>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div>
+        <div class="panel">
+            <h2>Score breakdown</h2>
+            {% set rows = [
+                ('Lighting',          lead.lighting),
+                ('Composition',       lead.composition),
+                ('Editing & colour',  lead.editing_colour),
+                ('Brand consistency', lead.brand_consistency),
+                ('Production value',  lead.content_production),
+                ('Overall judgment',  lead.overall),
+            ] %}
+            {% for label, val in rows %}
+            <div class="score-row">
+                <div class="label">{{ label }}</div>
+                <div class="bar"><div class="fill" style="width: {{ (val or 0) * 10 }}%"></div></div>
+                <div class="value">{{ val or 0 }}/10</div>
+            </div>
+            {% endfor %}
+            <div class="divider"></div>
+            <div class="score-row">
+                <div class="label" style="color:var(--gold); font-weight:600;">Overall score</div>
+                <div class="bar"><div class="fill" style="width: {{ ((lead.overall_score or 0) * 10)|round }}%"></div></div>
+                <div class="value">{{ lead.overall_score or 0 }}/10</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Top weaknesses</h2>
+            {% if lead.weaknesses %}
+            <ul class="bullet-list">
+                {% for w in lead.weaknesses %}<li>{{ w }}</li>{% endfor %}
+            </ul>
+            {% else %}
+            <div class="muted">None recorded.</div>
+            {% endif %}
+        </div>
+
+        {% if lead.strengths %}
+        <div class="panel">
+            <h2>Strengths</h2>
+            <ul class="bullet-list">
+                {% for s in lead.strengths %}<li>{{ s }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="panel">
+            <h2>Personalised pitch</h2>
+            <div class="pitch">{{ lead.personalised_pitch or 'No pitch generated.' }}</div>
+        </div>
+
+        {% if lead.sales_notes %}
+        <div class="panel">
+            <h2>Internal sales notes</h2>
+            <div class="muted" style="color:var(--text);">{{ lead.sales_notes }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div>
+        <div class="panel">
+            <h2>Business intent</h2>
+            <dl class="kv">
+                <dt>Type</dt><dd>{{ lead.business_type or 'unknown' }}</dd>
+                <dt>Intent score</dt><dd class="gold">{{ lead.business_intent_score or 0 }}/10</dd>
+                <dt>Location match</dt>
+                <dd>
+                    {% if lead.location_match %}
+                        <span class="badge location">match</span>
+                    {% else %}
+                        <span class="muted">no match</span>
+                    {% endif %}
+                </dd>
+                <dt>Priority</dt>
+                <dd>
+                    {% if lead.priority_flag %}
+                        <span class="badge priority">high priority</span>
+                    {% else %}
+                        <span class="muted">standard</span>
+                    {% endif %}
+                </dd>
+                <dt>Audience</dt><dd>{{ lead.estimated_audience_size or '-' }}</dd>
+                <dt>Upgrade potential</dt><dd>{{ lead.upgrade_potential or '-' }}</dd>
+                <dt>Screenshots</dt><dd>{{ lead.screenshot_count or 0 }}</dd>
+            </dl>
+
+            {% if lead.selling_signals %}
+            <div style="margin-top:14px;">
+                <div class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Selling signals</div>
+                <div class="tag-pills">
+                    {% for s in lead.selling_signals %}<span class="pill">{{ s }}</span>{% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if lead.location_signals %}
+            <div style="margin-top:14px;">
+                <div class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Location signals</div>
+                <div class="tag-pills">
+                    {% for s in lead.location_signals %}<span class="pill">{{ s }}</span>{% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="panel">
+            <h2>Sales pipeline</h2>
+            <form method="post" action="{{ url_for('lead_update', lead_id=lead.id) }}">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status">
+                        {% for s in ['new','contacted','qualified','closed','dead'] %}
+                        <option value="{{ s }}" {{ 'selected' if lead.status == s else '' }}>{{ s|capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Private notes</label>
+                    <textarea name="notes" placeholder="Outreach history, follow-ups, objections...">{{ lead.notes or '' }}</textarea>
+                </div>
+                <div class="btn-group">
+                    <button type="submit" class="btn primary">Save</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="panel">
+            <h2>Danger zone</h2>
+            <form method="post" action="{{ url_for('lead_delete', lead_id=lead.id) }}"
+                  onsubmit="return confirm('Delete @{{ lead.username }}?');">
+                <button type="submit" class="btn danger">Delete this lead</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

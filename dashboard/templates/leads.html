@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Leads - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Leads</h1>
+        <div class="subtitle">{{ leads|length }} lead{{ '' if leads|length == 1 else 's' }} matching your filters.</div>
+    </div>
+    <div class="btn-group">
+        <a href="{{ url_for('run') }}" class="btn primary">&#9654; New run</a>
+    </div>
+</div>
+
+<form method="get" class="filters">
+    <input type="search" name="q" value="{{ filters.q }}" placeholder="Search username or business type">
+    <select name="grade">
+        <option value="">All grades</option>
+        {% for g in ['A','B','C','D'] %}
+        <option value="{{ g }}" {{ 'selected' if filters.grade == g else '' }}>Grade {{ g }}</option>
+        {% endfor %}
+    </select>
+    <select name="status">
+        <option value="">All statuses</option>
+        {% for s in ['new','contacted','qualified','closed','dead'] %}
+        <option value="{{ s }}" {{ 'selected' if filters.status == s else '' }}>{{ s|capitalize }}</option>
+        {% endfor %}
+    </select>
+    <select name="business_type">
+        <option value="">All business types</option>
+        {% for bt in business_types %}
+        <option value="{{ bt }}" {{ 'selected' if filters.business_type == bt else '' }}>{{ bt }}</option>
+        {% endfor %}
+    </select>
+    <select name="order">
+        <option value="overall_score DESC" {{ 'selected' if filters.order == 'overall_score DESC' else '' }}>Score high &rarr; low</option>
+        <option value="overall_score ASC" {{ 'selected' if filters.order == 'overall_score ASC' else '' }}>Score low &rarr; high</option>
+        <option value="analysed_at DESC" {{ 'selected' if filters.order == 'analysed_at DESC' else '' }}>Newest first</option>
+        <option value="lead_grade ASC" {{ 'selected' if filters.order == 'lead_grade ASC' else '' }}>Grade A first</option>
+        <option value="business_intent_score DESC" {{ 'selected' if filters.order == 'business_intent_score DESC' else '' }}>Intent high &rarr; low</option>
+    </select>
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-mute);">
+        <input type="checkbox" name="priority" value="1" {{ 'checked' if filters.priority == '1' else '' }}>
+        Priority only
+    </label>
+    <button type="submit" class="btn primary">Apply</button>
+    <a href="{{ url_for('leads') }}" class="btn ghost">Reset</a>
+</form>
+
+<div class="panel" style="padding:0;">
+{% if leads %}
+<table class="data">
+    <thead>
+        <tr>
+            <th>Grade</th>
+            <th>Lead</th>
+            <th>Business</th>
+            <th class="right">Score</th>
+            <th class="right">Intent</th>
+            <th>Signals</th>
+            <th>Status</th>
+            <th>Analysed</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for l in leads %}
+    <tr>
+        <td><span class="grade {{ l.lead_grade or 'unknown' }}">{{ l.lead_grade or '?' }}</span></td>
+        <td>
+            <a href="{{ url_for('lead_detail', lead_id=l.id) }}" class="row-link">@{{ l.username }}</a>
+            {% if l.priority_flag %}<span class="badge priority" style="margin-left:6px;">priority</span>{% endif %}
+        </td>
+        <td class="muted">{{ l.business_type or '-' }}</td>
+        <td class="right num gold">{{ l.overall_score or 0 }}</td>
+        <td class="right num">{{ l.business_intent_score or 0 }}/10</td>
+        <td>
+            {% if l.location_match %}<span class="badge location">location</span>{% endif %}
+            {% if l.selling_signals %}<span class="badge">{{ l.selling_signals|length }} selling</span>{% endif %}
+        </td>
+        <td><span class="badge status-{{ l.status }}">{{ l.status }}</span></td>
+        <td class="muted">{{ l.analysed_at or '-' }}</td>
+        <td class="right"><a href="{{ url_for('lead_detail', lead_id=l.id) }}" class="muted">open &rarr;</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    No leads match these filters. <a href="{{ url_for('leads') }}">Reset</a> or <a href="{{ url_for('run') }}">run the pipeline</a>.
+</div>
+{% endif %}
+</div>
+{% endblock %}

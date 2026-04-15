@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Settings - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Settings</h1>
+        <div class="subtitle">Credentials, defaults, and data management.</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div>
+        <div class="panel">
+            <h2>Anthropic API</h2>
+            <form method="post">
+                <div class="form-group">
+                    <label>API key</label>
+                    <input type="password" name="anthropic_api_key"
+                           placeholder="{{ masked_key or 'sk-ant-...' }}">
+                    <div class="form-hint">
+                        {% if masked_key %}Current key: <code>{{ masked_key }}</code>. Leave empty to keep it.
+                        {% else %}No key saved yet.{% endif %}
+                    </div>
+                </div>
+
+                <h2 style="margin-top:22px;">Branding</h2>
+                <div class="form-group">
+                    <label>Company name</label>
+                    <input type="text" name="company_name" value="{{ settings.company_name }}">
+                </div>
+                <div class="form-group">
+                    <label>Tagline</label>
+                    <input type="text" name="company_tagline" value="{{ settings.company_tagline }}">
+                </div>
+
+                <h2 style="margin-top:22px;">Pipeline defaults</h2>
+                <div class="form-group">
+                    <label>Default location</label>
+                    <input type="text" name="default_location" value="{{ settings.default_location }}">
+                    <div class="form-hint">Used as the default target city on the Run page.</div>
+                </div>
+                <div class="form-group">
+                    <label>Default leads per run</label>
+                    <input type="number" name="default_leads_per_run" min="1" max="100"
+                           value="{{ settings.default_leads_per_run }}">
+                </div>
+                <div class="form-group">
+                    <label>Instagram username (display)</label>
+                    <input type="text" name="instagram_username" value="{{ settings.instagram_username }}"
+                           placeholder="Your studio's handle">
+                    <div class="form-hint">
+                        Actual Multilogin / Instagram credentials live in the files
+                        <code>C:/vidora/ig_user.txt</code>, <code>C:/vidora/ig_pass.txt</code>,
+                        <code>C:/vidora/pass.txt</code> &mdash; they are never stored in the database.
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn primary">Save settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div>
+        <div class="panel">
+            <h2>Import existing leads</h2>
+            <p class="muted" style="font-size:13px;">
+                Upload a <code>leads.csv</code> produced by <code>vidora_scout_final.py</code>
+                to load it into the dashboard. PDF audits will be regenerated.
+            </p>
+            <form method="post" action="{{ url_for('settings_import') }}" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label>CSV file</label>
+                    <input type="file" name="csv_file" accept=".csv" required>
+                </div>
+                <div class="btn-group">
+                    <button type="submit" class="btn primary">Import CSV</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="panel">
+            <h2>Pipeline files</h2>
+            <dl class="kv">
+                <dt>Scout script</dt><dd><code>vidora_scout_final.py</code></dd>
+                <dt>Multilogin pass</dt><dd><code>C:/vidora/pass.txt</code></dd>
+                <dt>Instagram user</dt><dd><code>C:/vidora/ig_user.txt</code></dd>
+                <dt>Instagram pass</dt><dd><code>C:/vidora/ig_pass.txt</code></dd>
+                <dt>Screenshots</dt><dd><code>C:/vidora/screenshots/</code></dd>
+                <dt>SQLite database</dt><dd><code>dashboard/data/vidora.db</code></dd>
+                <dt>PDF audits</dt><dd><code>dashboard/data/audits/</code></dd>
+            </dl>
+        </div>
+
+        <div class="panel">
+            <h2>About</h2>
+            <p class="muted" style="font-size:13px; margin:0;">
+                Vidora dashboard v1.0. Runs locally on port 8080.
+                All lead data is stored in a SQLite database on this machine only.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,8 +1,15 @@
 ig_user.txt
 ig_pass.txt
+ig_code.txt
 pass.txt
+google_api_key.txt
 *.png
 screenshots/
 __pycache__/
 *.pyc
 *.pyo
+*.db
+vidora.db
+dashboard/data/
+audits/
+run_*.csv

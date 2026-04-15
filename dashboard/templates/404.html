@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Not found - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="empty-state" style="margin-top:80px;">
+    <h1 class="gold" style="font-size:42px; margin-bottom:8px;">404</h1>
+    <p>The page you are looking for does not exist.</p>
+    <a href="{{ url_for('home') }}" class="btn primary" style="margin-top:16px;">Back to overview</a>
+</div>
+{% endblock %}
