@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Vidora Scout — Final Version
+Vidora Scout � Final Version
 ------------------------------
 Connects to Multilogin, starts your IG browser profile,
 browses Instagram explore, screenshots creators, analyses
@@ -31,7 +31,7 @@ except ImportError:
     print("ERROR: pip install anthropic")
     sys.exit(1)
 
-# ── Your Multilogin config ──────────────────────────────────────────────────
+# -- Your Multilogin config --------------------------------------------------
 ML_EMAIL      = "innoviteecom@gmail.com"
 ML_PASS_FILE  = "C:/vidora/pass.txt"
 FOLDER_ID     = "3fcc8abd-1429-45ea-9383-1e71db538bc0"
@@ -40,7 +40,7 @@ MLX_API       = "https://api.multilogin.com"
 MLX_LAUNCHER  = "https://127.0.0.1:45001/api/v2"
 LOCALHOST     = "http://127.0.0.1"
 
-# ── Timings ─────────────────────────────────────────────────────────────────
+# -- Timings -----------------------------------------------------------------
 SHORT_WAIT, MEDIUM_WAIT, LONG_WAIT = 2, 4, 7
 
 
@@ -104,7 +104,7 @@ def check_logged_in(driver):
 
 
 def collect_usernames(driver, limit: int) -> list:
-    print(f"  Browsing explore — collecting up to {limit} creators...")
+    print(f"  Browsing explore � collecting up to {limit} creators...")
     driver.get("https://www.instagram.com/explore/")
     time.sleep(LONG_WAIT)
 
@@ -205,12 +205,12 @@ PROMPT = """You are an expert media production consultant evaluating an Instagra
 Analyse these {n} screenshots from @{username}'s Instagram profile.
 
 Score each dimension 1-10 (10 = broadcast/editorial quality, 1 = very poor):
-1. LIGHTING — consistency, exposure, flattering vs harsh shadows
-2. COMPOSITION — framing, backgrounds, visual clutter
-3. EDITING & COLOUR — grade consistency, intentionality
-4. BRAND CONSISTENCY — coherent visual identity across the feed
-5. CONTENT PRODUCTION VALUE — overall production effort visible
-6. OVERALL — your holistic professional judgment
+1. LIGHTING � consistency, exposure, flattering vs harsh shadows
+2. COMPOSITION � framing, backgrounds, visual clutter
+3. EDITING & COLOUR � grade consistency, intentionality
+4. BRAND CONSISTENCY � coherent visual identity across the feed
+5. CONTENT PRODUCTION VALUE � overall production effort visible
+6. OVERALL � your holistic professional judgment
 
 Identify TOP 3 SPECIFIC WEAKNESSES. Be precise: not "bad lighting" but e.g. "single overhead bulb creates harsh downward shadows in every indoor shot".
 
@@ -279,11 +279,11 @@ def print_report(r: dict):
     print(f"  @{r['username']}")
     print(f"  Grade: {c}{grade}{RESET}  Score: {r.get('overall_score')}/10  Priority: {'YES' if r.get('priority_flag') else 'No'}")
     print(f"  Audience: {r.get('estimated_audience_size','?')}  Upgrade: {r.get('upgrade_potential','?')}")
-    print(f"{'─'*62}")
+    print(f"{'-'*62}")
     scores = r.get("scores", {})
     for key, label in [("lighting","Lighting"),("composition","Composition"),("editing_colour","Editing & colour"),("brand_consistency","Brand"),("content_production","Production"),("overall","Overall")]:
         s = scores.get(key, 0)
-        print(f"  {label:<20} {'█'*s}{'░'*(10-s)}  {s}/10")
+        print(f"  {label:<20} {'�'*s}{'�'*(10-s)}  {s}/10")
     print(f"\n  WEAKNESSES:")
     for i, w in enumerate(r.get("top_weaknesses", []), 1):
         print(f"    {i}. {w}")
@@ -395,7 +395,7 @@ def main():
             time.sleep(MEDIUM_WAIT)
 
     except KeyboardInterrupt:
-        print("\nStopped — saving results...")
+        print("\nStopped � saving results...")
     except Exception as e:
         print(f"\nError: {e}")
         import traceback; traceback.print_exc()
