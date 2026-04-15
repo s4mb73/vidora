@@ -6,3 +6,12 @@ screenshots/
 __pycache__/
 *.pyc
 *.pyo
+
+# dashboard runtime artifacts
+dashboard/data/vidora.db
+dashboard/data/audits/
+dashboard/data/_import.csv
+*.sqlite
+*.sqlite3
+.venv/
+venv/

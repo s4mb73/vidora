@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Run #{{ run.id }} - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <a href="{{ url_for('run') }}" class="muted" style="font-size:12px;">&larr; Back to runs</a>
+        <h1 style="margin-top:6px;">Run #{{ run.id }}</h1>
+        <div class="subtitle">
+            {{ run.started_at }} &rarr; {{ run.finished_at or 'in progress' }}
+            &middot; target {{ run.leads_target }} &middot; found {{ run.leads_found }}
+        </div>
+    </div>
+    <div>
+        {% if run.status == 'running' %}
+            <span class="running-indicator"><span class="pulse"></span> running</span>
+        {% elif run.status == 'success' %}
+            <span class="badge" style="color:var(--green); border-color:var(--green);">success</span>
+        {% else %}
+            <span class="badge" style="color:var(--red); border-color:var(--red);">{{ run.status }}</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel">
+    <h2>Log</h2>
+    <div class="log">{{ run.log or 'No output.' }}</div>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if run.status == 'running' %}
+<script>setTimeout(() => window.location.reload(), 3000);</script>
+{% endif %}
+{% endblock %}

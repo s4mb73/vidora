@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Overview - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Overview</h1>
+        <div class="subtitle">Pipeline status and lead health at a glance.</div>
+    </div>
+    <div class="btn-group">
+        <a href="{{ url_for('run') }}" class="btn primary">&#9654; Run pipeline</a>
+        <a href="{{ url_for('leads') }}" class="btn">View all leads</a>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="label">Total leads</div>
+        <div class="value gold">{{ stats.total }}</div>
+        <div class="hint">in the database</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Priority</div>
+        <div class="value">{{ stats.priority }}</div>
+        <div class="hint">Grade A or B</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Avg score</div>
+        <div class="value">{{ stats.avg_score }}<span class="muted" style="font-size:14px;">/10</span></div>
+        <div class="hint">content quality</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Location match</div>
+        <div class="value">{{ stats.location_matches }}</div>
+        <div class="hint">target city signals</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Contacted</div>
+        <div class="value">{{ stats.contacted }}</div>
+        <div class="hint">status &ne; new</div>
+    </div>
+</div>
+
+<div class="panel">
+    <h2>Grade distribution</h2>
+    <div class="stat-grid" style="margin-bottom:0;">
+        {% for g in ['A','B','C','D'] %}
+        <div class="stat-card">
+            <div class="label">Grade {{ g }}</div>
+            <div class="value"><span class="grade {{ g }}">{{ g }}</span>
+                <span style="margin-left:10px;">{{ stats.grades[g] }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="panel">
+        <div class="row-between" style="margin-bottom:10px;">
+            <h2 style="margin:0;">Top scoring leads</h2>
+            <a href="{{ url_for('leads', order='overall_score DESC') }}" class="muted" style="font-size:12px;">view all</a>
+        </div>
+        {% if top %}
+        <table class="data">
+            <thead><tr><th>Lead</th><th>Grade</th><th class="right">Score</th></tr></thead>
+            <tbody>
+            {% for l in top %}
+            <tr>
+                <td><a href="{{ url_for('lead_detail', lead_id=l.id) }}" class="row-link">@{{ l.username }}</a>
+                    <div class="muted" style="font-size:11px;">{{ l.business_type or '-' }}</div>
+                </td>
+                <td><span class="grade {{ l.lead_grade or 'unknown' }}">{{ l.lead_grade or '?' }}</span></td>
+                <td class="right num gold">{{ l.overall_score or 0 }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">No leads yet. <a href="{{ url_for('run') }}">Run the pipeline</a> to get started.</div>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        <div class="row-between" style="margin-bottom:10px;">
+            <h2 style="margin:0;">Recent activity</h2>
+            <a href="{{ url_for('leads', order='analysed_at DESC') }}" class="muted" style="font-size:12px;">view all</a>
+        </div>
+        {% if recent %}
+        <table class="data">
+            <thead><tr><th>Lead</th><th>When</th><th class="right">Grade</th></tr></thead>
+            <tbody>
+            {% for l in recent %}
+            <tr>
+                <td><a href="{{ url_for('lead_detail', lead_id=l.id) }}" class="row-link">@{{ l.username }}</a></td>
+                <td class="muted">{{ l.analysed_at or l.created_at }}</td>
+                <td class="right"><span class="grade {{ l.lead_grade or 'unknown' }}">{{ l.lead_grade or '?' }}</span></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">Nothing analysed yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+{% if runs %}
+<div class="panel">
+    <h2>Recent runs</h2>
+    <table class="data">
+        <thead>
+            <tr>
+                <th>#</th><th>Started</th><th>Finished</th>
+                <th>Location</th><th>Target</th><th>Found</th><th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in runs %}
+        <tr>
+            <td><a href="{{ url_for('run_detail', run_id=r.id) }}" class="row-link">#{{ r.id }}</a></td>
+            <td class="muted">{{ r.started_at }}</td>
+            <td class="muted">{{ r.finished_at or '-' }}</td>
+            <td>{{ r.location or '-' }}</td>
+            <td class="num">{{ r.leads_target }}</td>
+            <td class="num gold">{{ r.leads_found }}</td>
+            <td>
+                {% if r.status == 'running' %}
+                    <span class="running-indicator"><span class="pulse"></span> running</span>
+                {% elif r.status == 'success' %}
+                    <span class="badge" style="color:var(--green); border-color:var(--green);">success</span>
+                {% else %}
+                    <span class="badge" style="color:var(--red); border-color:var(--red);">{{ r.status }}</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

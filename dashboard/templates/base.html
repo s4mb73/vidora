@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ company_name }}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app">
+    <aside class="sidebar">
+        <div class="brand">{{ company_name }}<span class="dot">.</span></div>
+        <div class="tagline">{{ company_tagline }}</div>
+        <nav class="nav">
+            <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' else '' }}">
+                <span class="icon">&#9632;</span> Overview
+            </a>
+            <a href="{{ url_for('leads') }}" class="{{ 'active' if active_page == 'leads' else '' }}">
+                <span class="icon">&#9733;</span> Leads
+            </a>
+            <a href="{{ url_for('run') }}" class="{{ 'active' if active_page == 'run' else '' }}">
+                <span class="icon">&#9654;</span> Run pipeline
+            </a>
+            <a href="{{ url_for('settings_page') }}" class="{{ 'active' if active_page == 'settings' else '' }}">
+                <span class="icon">&#9881;</span> Settings
+            </a>
+        </nav>
+        <div class="foot">
+            <span class="status-dot {{ 'live' if is_running else '' }}"></span>
+            {% if is_running %}Pipeline running{% else %}Idle{% endif %}
+            <div style="margin-top:6px;">v1.0</div>
+        </div>
+    </aside>
+
+    <main class="main">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flashes">
+                {% for cat, msg in messages %}
+                <div class="flash {{ cat }}">{{ msg }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>
