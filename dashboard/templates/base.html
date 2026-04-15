@@ -4,12 +4,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ company_name }}{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <div class="app">
     <aside class="sidebar">
-        <div class="brand">{{ company_name }}<span class="dot">.</span></div>
+        <div class="brand">
+            <span class="brand-mark">{{ company_name }}</span>
+            <span class="brand-dot"></span>
+        </div>
         <div class="tagline">{{ company_tagline }}</div>
         <nav class="nav">
             <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' else '' }}">

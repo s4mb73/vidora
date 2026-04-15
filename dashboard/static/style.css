@@ -21,9 +21,11 @@
     --radius:     10px;
     --radius-sm:  6px;
     --shadow:     0 6px 20px rgba(0, 0, 0, 0.35);
-    --font:       -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+    --font:       "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                   "Helvetica Neue", Arial, sans-serif;
-    --mono:       "SF Mono", Menlo, Consolas, "Roboto Mono", monospace;
+    --font-serif: "Instrument Serif", "Cormorant Garamond", "Times New Roman",
+                  Georgia, serif;
+    --mono:       "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -35,7 +37,11 @@ html, body {
     color: var(--text);
     font-family: var(--font);
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.55;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
 }
 
 a { color: var(--gold); text-decoration: none; }
@@ -59,20 +65,37 @@ a:hover { text-decoration: underline; }
 }
 
 .sidebar .brand {
-    font-family: var(--font);
-    font-weight: 700;
-    font-size: 22px;
-    letter-spacing: 0.08em;
-    color: var(--gold);
-    text-transform: uppercase;
-    margin-bottom: 2px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 4px;
 }
-.sidebar .brand .dot { color: var(--text); }
+.sidebar .brand-mark {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-style: italic;
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    background: linear-gradient(135deg, var(--gold) 0%, #e8cfa0 55%, var(--gold-dim) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--gold);
+}
+.sidebar .brand-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 10px rgba(201, 168, 76, 0.6);
+    margin-bottom: 4px;
+}
 .sidebar .tagline {
     font-size: 11px;
     color: var(--text-mute);
-    margin-bottom: 28px;
-    line-height: 1.4;
+    margin-bottom: 32px;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+    max-width: 180px;
 }
 
 .nav { display: flex; flex-direction: column; gap: 2px; }
@@ -125,14 +148,19 @@ a:hover { text-decoration: underline; }
     flex-wrap: wrap;
 }
 .page-head h1 {
-    font-size: 22px;
-    margin: 0 0 4px;
-    font-weight: 600;
-    letter-spacing: 0.01em;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 36px;
+    margin: 0 0 6px;
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    line-height: 1.05;
+    color: var(--text);
 }
 .page-head .subtitle {
     color: var(--text-mute);
     font-size: 13px;
+    letter-spacing: 0.005em;
 }
 
 /* Flash ----------------------------------------------------------------- */
@@ -161,17 +189,22 @@ a:hover { text-decoration: underline; }
     padding: 16px 18px;
 }
 .stat-card .label {
-    font-size: 11px;
+    font-size: 10.5px;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.16em;
     color: var(--text-mute);
 }
 .stat-card .value {
-    font-size: 28px;
-    font-weight: 600;
-    margin-top: 6px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 40px;
+    font-weight: 400;
+    line-height: 1.05;
+    margin-top: 10px;
     color: var(--text);
     font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
 }
 .stat-card .value.gold { color: var(--gold); }
 .stat-card .value.small { font-size: 17px; }
@@ -190,12 +223,12 @@ a:hover { text-decoration: underline; }
     margin-bottom: 20px;
 }
 .panel h2 {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--gold);
-    margin: 0 0 14px;
+    letter-spacing: 0.18em;
+    color: var(--text-mute);
+    margin: 0 0 16px;
 }
 .panel .row-between {
     display: flex; align-items: center; justify-content: space-between;
@@ -222,9 +255,9 @@ table.data th, table.data td {
 table.data th {
     color: var(--text-mute);
     font-weight: 500;
-    font-size: 11px;
+    font-size: 10.5px;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.16em;
     background: var(--bg-elev);
 }
 table.data tr:hover td { background: var(--bg-hover); }
@@ -362,11 +395,21 @@ table.data a.row-link:hover { color: var(--gold); text-decoration: none; }
     flex-wrap: wrap;
 }
 .lead-head h1 {
-    font-size: 26px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 44px;
     margin: 0;
-    font-weight: 600;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
 }
-.lead-head h1 .at { color: var(--gold); }
+.lead-head h1 .at {
+    font-family: var(--font);
+    font-style: normal;
+    font-weight: 300;
+    color: var(--gold);
+    margin-right: 2px;
+}
 .lead-head .meta {
     color: var(--text-mute);
     font-size: 13px;
