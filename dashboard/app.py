@@ -93,10 +93,12 @@ def create_app() -> Flask:
             search=search,
             order_by=order_by,
         )
+        pipeline_stats = db.leads_pipeline_stats()
         return render_template(
             "leads.html",
             leads=items,
             business_types=db.business_types(),
+            pipeline_stats=pipeline_stats,
             filters={
                 "grade": grade or "",
                 "priority": "1" if priority_only else "",
@@ -157,8 +159,27 @@ def create_app() -> Flask:
 
     @app.route("/leads/<int:lead_id>/delete", methods=["POST"])
     def lead_delete(lead_id: int):
-        db.delete_lead(lead_id)
+        lead = db.get_lead(lead_id)
+        if lead:
+            _delete_lead_with_pdf(lead)
         flash("Lead deleted.", "success")
+        return redirect(url_for("leads"))
+
+    @app.route("/leads/bulk-delete", methods=["POST"])
+    def leads_bulk_delete():
+        raw_ids = request.form.getlist("lead_ids")
+        deleted = 0
+        for raw in raw_ids:
+            try:
+                lead_id = int(raw)
+            except (ValueError, TypeError):
+                continue
+            lead = db.get_lead(lead_id)
+            if lead:
+                _delete_lead_with_pdf(lead)
+                deleted += 1
+        if deleted:
+            flash(f"{deleted} lead{'s' if deleted != 1 else ''} deleted.", "success")
         return redirect(url_for("leads"))
 
     @app.route("/leads/<int:lead_id>/send-email", methods=["POST"])
@@ -205,6 +226,32 @@ def create_app() -> Flask:
             db.update_lead_fields(lead_id, updates)
             flash("Email details saved.", "success")
         return redirect(url_for("lead_detail", lead_id=lead_id))
+
+    @app.route("/leads/export-csv")
+    def leads_export_csv():
+        import csv, io
+        from flask import Response
+        grade   = request.args.get("grade") or None
+        status  = request.args.get("status") or None
+        search  = request.args.get("q") or None
+        order   = request.args.get("order") or "overall_score DESC"
+        items   = db.list_leads(grade=grade, status=status, search=search, order_by=order)
+        fields  = [
+            "username","business_name","lead_grade","overall_score","business_intent_score",
+            "business_type","status","followers","engagement_rate","posting_frequency",
+            "maps_review_count","maps_rating","maps_address","maps_phone","maps_website",
+            "email","personalised_pitch","sales_notes","analysed_at",
+        ]
+        out = io.StringIO()
+        w = csv.DictWriter(out, fieldnames=fields, extrasaction="ignore")
+        w.writeheader()
+        for lead in items:
+            w.writerow({f: lead.get(f, "") for f in fields})
+        return Response(
+            out.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment; filename=vidora-leads.csv"},
+        )
 
     @app.route("/leads/<int:lead_id>/audit")
     def lead_audit(lead_id: int):
@@ -404,6 +451,17 @@ def create_app() -> Flask:
         return render_template("404.html"), 404
 
     return app
+
+
+def _delete_lead_with_pdf(lead: dict) -> None:
+    """Delete a lead from DB and remove its audit PDF if it exists."""
+    audit = lead.get("audit_path")
+    if audit:
+        try:
+            Path(audit).unlink(missing_ok=True)
+        except Exception:
+            pass
+    db.delete_lead(lead["id"])
 
 
 def _mask(value: str) -> str:

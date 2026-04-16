@@ -1,28 +1,66 @@
 {% extends "base.html" %}
 {% block title %}Leads - {{ company_name }}{% endblock %}
 {% block content %}
+
+{# ── Pipeline stats bar ───────────────────────────────────────────── #}
+{% set ps = pipeline_stats or {} %}
+<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px;">
+    <div class="panel" style="padding:14px 18px; text-align:center;">
+        <div style="font-size:22px; font-weight:700; color:var(--blue);">{{ ps.leads_today or 0 }}</div>
+        <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">Leads today</div>
+    </div>
+    <div class="panel" style="padding:14px 18px; text-align:center;">
+        <div style="font-size:22px; font-weight:700; color:var(--blue);">{{ ps.emails_today or 0 }}</div>
+        <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">Emails sent today</div>
+    </div>
+    <div class="panel" style="padding:14px 18px; text-align:center;">
+        <div style="font-size:22px; font-weight:700; color:{% if (ps.reply_rate or 0) >= 5 %}var(--green){% else %}var(--gold){% endif %};">{{ ps.reply_rate or 0 }}%</div>
+        <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">Reply rate this week</div>
+    </div>
+    <div class="panel" style="padding:14px 18px; text-align:center;">
+        <div style="font-size:22px; font-weight:700;">
+            <span class="grade {{ ps.best_grade or 'unknown' }}" style="font-size:18px;">{{ ps.best_grade or '-' }}</span>
+        </div>
+        <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">Best in queue</div>
+    </div>
+</div>
+
 <div class="page-head">
     <div>
         <h1>Leads</h1>
         <div class="subtitle">{{ leads|length }} lead{{ '' if leads|length == 1 else 's' }} matching your filters.</div>
     </div>
     <div class="btn-group">
+        <a href="{{ url_for('leads_export_csv', **request.args) }}" class="btn">&#8681; Export CSV</a>
         <a href="{{ url_for('run') }}" class="btn primary">&#9654; New run</a>
     </div>
 </div>
 
+{# ── Status tabs ──────────────────────────────────────────────────── #}
+<div style="display:flex; gap:4px; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:0;">
+    {% set tab_statuses = [('', 'All'), ('new', 'New'), ('contacted', 'Contacted'), ('replied', 'Replied'), ('qualified', 'Qualified'), ('closed', 'Closed')] %}
+    {% for val, label in tab_statuses %}
+    <a href="{{ url_for('leads', **dict(request.args, status=val)) }}"
+       style="padding:7px 14px; font-size:12px; font-weight:600; border-radius:4px 4px 0 0;
+              text-decoration:none; border:1px solid transparent; margin-bottom:-1px;
+              {% if filters.status == val %}
+                background:var(--panel); border-color:var(--border); border-bottom-color:var(--panel); color:var(--text);
+              {% else %}
+                color:var(--text-mute);
+              {% endif %}">
+        {{ label }}
+    </a>
+    {% endfor %}
+</div>
+
+{# ── Filters ──────────────────────────────────────────────────────── #}
 <form method="get" class="filters">
-    <input type="search" name="q" value="{{ filters.q }}" placeholder="Search username or business type">
+    <input type="hidden" name="status" value="{{ filters.status }}">
+    <input type="search" name="q" value="{{ filters.q }}" placeholder="Search name, username, business type...">
     <select name="grade">
         <option value="">All grades</option>
         {% for g in ['A','B','C','D'] %}
         <option value="{{ g }}" {{ 'selected' if filters.grade == g else '' }}>Grade {{ g }}</option>
-        {% endfor %}
-    </select>
-    <select name="status">
-        <option value="">All statuses</option>
-        {% for s in ['new','contacted','qualified','closed','dead'] %}
-        <option value="{{ s }}" {{ 'selected' if filters.status == s else '' }}>{{ s|capitalize }}</option>
         {% endfor %}
     </select>
     <select name="business_type">
@@ -33,9 +71,9 @@
     </select>
     <select name="order">
         <option value="overall_score DESC" {{ 'selected' if filters.order == 'overall_score DESC' else '' }}>Score high &rarr; low</option>
-        <option value="overall_score ASC" {{ 'selected' if filters.order == 'overall_score ASC' else '' }}>Score low &rarr; high</option>
-        <option value="analysed_at DESC" {{ 'selected' if filters.order == 'analysed_at DESC' else '' }}>Newest first</option>
-        <option value="lead_grade ASC" {{ 'selected' if filters.order == 'lead_grade ASC' else '' }}>Grade A first</option>
+        <option value="overall_score ASC"  {{ 'selected' if filters.order == 'overall_score ASC'  else '' }}>Score low &rarr; high</option>
+        <option value="analysed_at DESC"   {{ 'selected' if filters.order == 'analysed_at DESC'   else '' }}>Newest first</option>
+        <option value="lead_grade ASC"     {{ 'selected' if filters.order == 'lead_grade ASC'     else '' }}>Grade A first</option>
         <option value="business_intent_score DESC" {{ 'selected' if filters.order == 'business_intent_score DESC' else '' }}>Intent high &rarr; low</option>
     </select>
     <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-mute);">
@@ -46,11 +84,23 @@
     <a href="{{ url_for('leads') }}" class="btn ghost">Reset</a>
 </form>
 
+{# ── Bulk delete toolbar ───────────────────────────────────────────── #}
+<form method="post" action="{{ url_for('leads_bulk_delete') }}" id="bulk-form">
+    <div id="bulk-bar" style="display:none; align-items:center; gap:12px; margin-bottom:12px;
+         background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:10px 16px;">
+        <span id="bulk-count" style="font-size:13px; font-weight:600; color:var(--text);"></span>
+        <button type="button" class="btn danger" onclick="confirmBulkDelete()">&#128465; Delete selected</button>
+        <button type="button" class="btn ghost" onclick="clearSelection()">Cancel</button>
+    </div>
+
 <div class="panel" style="padding:0;">
 {% if leads %}
 <table class="data">
     <thead>
         <tr>
+            <th style="width:36px; padding-left:14px;">
+                <input type="checkbox" id="select-all" title="Select all" onchange="toggleAll(this)">
+            </th>
             <th>Grade</th>
             <th>Lead</th>
             <th>Business</th>
@@ -59,22 +109,24 @@
             <th class="right">Followers</th>
             <th class="right">ER</th>
             <th class="right">Web</th>
-            <th>Signals</th>
             <th>Status</th>
             <th>Analysed</th>
-            <th></th>
+            <th style="width:90px;"></th>
         </tr>
     </thead>
     <tbody>
     {% for l in leads %}
     {% set wa = l.website_analysis or {} %}
     <tr>
+        <td style="padding-left:14px;">
+            <input type="checkbox" name="lead_ids" value="{{ l.id }}" class="row-check" onchange="updateBulkBar()">
+        </td>
         <td><span class="grade {{ l.lead_grade or 'unknown' }}">{{ l.lead_grade or '?' }}</span></td>
         <td>
             <a href="{{ url_for('lead_detail', lead_id=l.id) }}" class="row-link">@{{ l.username }}</a>
             {% if l.priority_flag %}<span class="badge priority" style="margin-left:6px;">priority</span>{% endif %}
         </td>
-        <td class="muted">{{ l.business_type or '-' }}</td>
+        <td class="muted">{{ l.business_name or l.business_type or '-' }}</td>
         <td class="right num gold">{{ l.overall_score or 0 }}</td>
         <td class="right num">{{ l.business_intent_score or 0 }}/10</td>
         <td class="right num">
@@ -94,13 +146,26 @@
                 </span>
             {% else %}-{% endif %}
         </td>
-        <td>
-            {% if l.location_match %}<span class="badge location">location</span>{% endif %}
-            {% if l.selling_signals %}<span class="badge">{{ l.selling_signals|length }} selling</span>{% endif %}
-        </td>
         <td><span class="badge status-{{ l.status }}">{{ l.status }}</span></td>
-        <td class="muted">{{ l.analysed_at or '-' }}</td>
-        <td class="right"><a href="{{ url_for('lead_detail', lead_id=l.id) }}" class="muted">open &rarr;</a></td>
+        <td class="muted" style="font-size:11px;">{{ (l.analysed_at or '-')[:10] }}</td>
+        <td style="white-space:nowrap; text-align:right; padding-right:12px;">
+            <a href="{{ url_for('lead_detail', lead_id=l.id) }}" class="muted" style="margin-right:6px; font-size:11px;">open</a>
+            {% if l.email %}
+            <button type="button" title="Copy email address"
+                    onclick="copyEmail('{{ l.email }}', this)"
+                    style="background:none; border:none; cursor:pointer; color:var(--text-mute);
+                           font-size:13px; padding:0 4px; line-height:1; opacity:.7;"
+                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">
+                &#9993;
+            </button>
+            {% endif %}
+            <button type="button" title="Delete" onclick="quickDelete({{ l.id }}, '@{{ l.username }}')"
+                    style="background:none; border:none; cursor:pointer; color:var(--red);
+                           font-size:14px; padding:0 2px; line-height:1; opacity:.7;"
+                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">
+                &#128465;
+            </button>
+        </td>
     </tr>
     {% endfor %}
     </tbody>
@@ -111,4 +176,59 @@
 </div>
 {% endif %}
 </div>
+</form>
+
+{# Hidden single-delete form #}
+<form method="post" id="single-delete-form" style="display:none;"></form>
+
+{# Toast for copy confirmation #}
+<div id="copy-toast" style="display:none; position:fixed; bottom:24px; right:24px;
+     background:var(--black); color:#fff; padding:10px 18px; border-radius:6px;
+     font-size:13px; font-weight:500; z-index:9999; box-shadow:0 4px 16px rgba(0,0,0,.3);">
+    Copied
+</div>
+
+<script>
+function updateBulkBar() {
+    const checks = document.querySelectorAll('.row-check:checked');
+    const n = checks.length;
+    const bar = document.getElementById('bulk-bar');
+    document.getElementById('bulk-count').textContent = n + ' lead' + (n !== 1 ? 's' : '') + ' selected';
+    bar.style.display = n > 0 ? 'flex' : 'none';
+    const all = document.querySelectorAll('.row-check');
+    const sa = document.getElementById('select-all');
+    sa.indeterminate = n > 0 && n < all.length;
+    sa.checked = n === all.length && all.length > 0;
+}
+function toggleAll(master) {
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = master.checked);
+    updateBulkBar();
+}
+function clearSelection() {
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = false);
+    document.getElementById('select-all').checked = false;
+    updateBulkBar();
+}
+function confirmBulkDelete() {
+    const n = document.querySelectorAll('.row-check:checked').length;
+    if (!n) return;
+    if (confirm('Delete ' + n + ' lead' + (n !== 1 ? 's' : '') + '? This cannot be undone.'))
+        document.getElementById('bulk-form').submit();
+}
+function quickDelete(id, name) {
+    if (!confirm('Delete ' + name + '? This cannot be undone.')) return;
+    const f = document.getElementById('single-delete-form');
+    f.action = '/leads/' + id + '/delete';
+    f.method = 'post';
+    f.submit();
+}
+function copyEmail(email, btn) {
+    navigator.clipboard.writeText(email).then(() => {
+        const t = document.getElementById('copy-toast');
+        t.textContent = 'Copied ' + email;
+        t.style.display = 'block';
+        setTimeout(() => t.style.display = 'none', 2000);
+    });
+}
+</script>
 {% endblock %}

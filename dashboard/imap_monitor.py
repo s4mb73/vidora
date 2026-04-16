@@ -29,7 +29,7 @@ from .discord import notify_reply
 
 IMAP_HOST = "imap.zoho.eu"
 IMAP_PORT = 993
-CHECK_INTERVAL = 1800  # 30 minutes
+CHECK_INTERVAL = 900   # 15 minutes
 
 CRED_EMAIL = Path("C:/vidora/zoho_email.txt")
 CRED_PASS  = Path("C:/vidora/zoho_pass.txt")

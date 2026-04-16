@@ -261,10 +261,7 @@ def build_body(lead: dict, settings: dict) -> str:
         f"content looks like it costs what their treatments do{reviews_line}.\n\n"
         f"{social_proof}\n\n"
         f"Worth seeing what that looks like for {biz} - yes or no?\n\n"
-        f"{sender_name}\n"
-        f"{sender_title}\n"
-        f"{sender_website}{address_line}\n\n"
-        f"To opt out of future emails reply UNSUBSCRIBE."
+        f"{sender_name}"
     )
     return body
 
@@ -273,15 +270,27 @@ def build_body(lead: dict, settings: dict) -> str:
 # Day 3 — competitor specific follow-up
 # ---------------------------------------------------------------------------
 
+def _original_subject(lead_id: int, settings: dict) -> str:
+    """Return the Day 1 subject sent to this lead, for Re: threading."""
+    with db.connection() as conn:
+        row = conn.execute(
+            "SELECT subject FROM outreach_log WHERE lead_id = ? AND sequence_day = 1 AND status = 'sent' "
+            "ORDER BY sent_at DESC LIMIT 1",
+            (lead_id,),
+        ).fetchone()
+    if row and row["subject"]:
+        return row["subject"]
+    # Fallback: build it fresh
+    lead = db.get_lead(lead_id) or {}
+    return build_subject(lead, settings)
+
+
 def build_followup_day3(lead: dict, settings: dict) -> tuple[str, str]:
     """Returns (subject, body)."""
-    subj_tmpl = settings.get(
-        "followup_day3_subject",
-        "{business_name} - what {competitor_name} are doing differently",
-    )
     body_tmpl = settings.get("followup_day3_body", "")
 
-    subject = _fill(subj_tmpl, lead, settings)
+    orig_subj = _original_subject(lead["id"], settings)
+    subject = f"Re: {orig_subj}"
 
     if body_tmpl.strip():
         body = _fill(body_tmpl, lead, settings)
@@ -289,11 +298,7 @@ def build_followup_day3(lead: dict, settings: dict) -> tuple[str, str]:
         biz          = _short_name(lead)
         comp_name    = _competitor_name(lead, settings)
         review_count = _fmt(lead.get("maps_review_count"), fallback="hundreds of")
-        sender_name    = settings.get("sender_name", "Louis")
-        sender_title   = settings.get("sender_title", "Innovite")
-        sender_website = settings.get("sender_website", "innovite.io")
-        sender_address = settings.get("sender_address", "")
-        address_line   = f"\n{sender_address}" if sender_address else ""
+        sender_name  = settings.get("sender_name", "Louis")
 
         body = (
             f"{biz} has {review_count} reviews sitting completely unused on Instagram "
@@ -304,10 +309,7 @@ def build_followup_day3(lead: dict, settings: dict) -> tuple[str, str]:
             f"One restructured bio and a Reviews highlight costs nothing to set up - what "
             f"determines whether patients act on it is the quality of the content behind it.\n\n"
             f"That the piece worth fixing - yes or no?\n\n"
-            f"{sender_name}\n"
-            f"{sender_title}\n"
-            f"{sender_website}{address_line}\n\n"
-            f"To opt out of future emails reply UNSUBSCRIBE."
+            f"{sender_name}"
         )
     return subject, body
 
@@ -318,40 +320,30 @@ def build_followup_day3(lead: dict, settings: dict) -> tuple[str, str]:
 
 def build_followup_day7(lead: dict, settings: dict) -> tuple[str, str]:
     """Returns (subject, body)."""
-    biz_type   = _biz_type(lead)
-    subj_tmpl  = settings.get(
-        "followup_day7_subject",
-        "two Manchester dental practices - one spot left",
-    )
-    body_tmpl  = settings.get("followup_day7_body", "")
+    body_tmpl = settings.get("followup_day7_body", "")
 
-    subject = _fill(subj_tmpl, lead, settings)
+    orig_subj = _original_subject(lead["id"], settings)
+    subject = f"Re: {orig_subj}"
 
     if body_tmpl.strip():
         body = _fill(body_tmpl, lead, settings)
     else:
-        biz            = _short_name(lead)
-        review_count   = _fmt(lead.get("maps_review_count"), fallback="hundreds of")
-        rating         = _fmt(lead.get("maps_rating"), fallback="")
-        rating_str     = f" and a {rating}-star average" if rating else ""
-        sender_name    = settings.get("sender_name", "Louis")
-        sender_title   = settings.get("sender_title", "Innovite")
-        sender_website = settings.get("sender_website", "innovite.io")
-        sender_address = settings.get("sender_address", "")
-        address_line   = f"\n{sender_address}" if sender_address else ""
+        biz          = _short_name(lead)
+        biz_type     = _biz_type(lead)
+        review_count = _fmt(lead.get("maps_review_count"), fallback="hundreds of")
+        rating       = _fmt(lead.get("maps_rating"), fallback="")
+        rating_str   = f" and a {rating}-star average" if rating else ""
+        sender_name  = settings.get("sender_name", "Louis")
 
         body = (
-            f"Taking on two Manchester dental practices for production content this month - "
+            f"Taking on two Manchester {biz_type}s for production content this month - "
             f"one is confirmed, one spot is still open.\n\n"
             f"{biz} fits exactly the profile that works: strong offline reputation, "
             f"consistent posting schedule, engagement that hasn't caught up yet.\n\n"
             f"A practice with {review_count} reviews{rating_str} has already done the hard part "
             f"- the content is what's missing.\n\n"
             f"Is that second spot for {biz} - yes or no?\n\n"
-            f"{sender_name}\n"
-            f"{sender_title}\n"
-            f"{sender_website}{address_line}\n\n"
-            f"To opt out of future emails reply UNSUBSCRIBE."
+            f"{sender_name}"
         )
     return subject, body
 

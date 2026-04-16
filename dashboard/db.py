@@ -381,9 +381,9 @@ def list_leads(
         where.append("business_type = ?")
         params.append(business_type)
     if search:
-        where.append("(username LIKE ? OR business_type LIKE ?)")
+        where.append("(username LIKE ? OR business_type LIKE ? OR business_name LIKE ?)")
         q = f"%{search}%"
-        params.extend([q, q])
+        params.extend([q, q, q])
 
     sql = "SELECT * FROM leads"
     if where:
@@ -539,6 +539,38 @@ def weekly_stats() -> dict:
     }
 
 
+def leads_pipeline_stats() -> dict:
+    """Stats shown in the leads page pipeline bar."""
+    with connection() as conn:
+        today = conn.execute(
+            "SELECT COUNT(*) AS n FROM leads WHERE DATE(analysed_at) = DATE('now')"
+        ).fetchone()["n"]
+        emails_today = conn.execute(
+            "SELECT COUNT(*) AS n FROM outreach_log "
+            "WHERE status='sent' AND DATE(sent_at)=DATE('now')"
+        ).fetchone()["n"]
+        replied_week = conn.execute(
+            "SELECT COUNT(*) AS n FROM outreach_log "
+            "WHERE status='replied' AND sent_at >= datetime('now','-7 days')"
+        ).fetchone()["n"]
+        sent_week = conn.execute(
+            "SELECT COUNT(*) AS n FROM outreach_log "
+            "WHERE status='sent' AND sent_at >= datetime('now','-7 days')"
+        ).fetchone()["n"]
+        best = conn.execute(
+            "SELECT lead_grade FROM leads WHERE status='new' "
+            "ORDER BY CASE lead_grade WHEN 'A' THEN 1 WHEN 'B' THEN 2 "
+            "WHEN 'C' THEN 3 ELSE 4 END LIMIT 1"
+        ).fetchone()
+    reply_rate = round(replied_week / sent_week * 100) if sent_week else 0
+    return {
+        "leads_today": today,
+        "emails_today": emails_today,
+        "reply_rate": reply_rate,
+        "best_grade": best["lead_grade"] if best else "-",
+    }
+
+
 def business_types() -> list[str]:
     with connection() as conn:
         rows = conn.execute(
@@ -638,12 +670,33 @@ def log_outreach(lead_id: int, to_email: str, subject: str, sequence_day: int = 
 # ---------------------------------------------------------------------------
 
 def schedule_followups(lead_id: int) -> None:
-    """Queue Day 3 and Day 7 follow-ups after a successful Day 1 send."""
+    """Queue Day 3 and Day 7 follow-ups after a successful Day 1 send.
+
+    Each follow-up is scheduled relative to the Day 1 send time so there is
+    always at least a 48-hour gap between any two sends.  Day 3 = +3 days from
+    Day 1 send, Day 7 = +7 days from Day 1 send (minimum 48 h after Day 3).
+    """
     from datetime import datetime, timedelta
-    now = datetime.now()
+    # Anchor from the actual Day 1 send time (not "now") so gaps are precise.
+    with connection() as conn:
+        row = conn.execute(
+            "SELECT sent_at FROM outreach_log WHERE lead_id = ? AND sequence_day = 1 "
+            "AND status = 'sent' ORDER BY sent_at DESC LIMIT 1",
+            (lead_id,),
+        ).fetchone()
+    anchor = datetime.fromisoformat(row["sent_at"]) if row else datetime.now()
+
     with connection() as conn:
         for day in (3, 7):
-            send_at = (now + timedelta(days=day)).strftime("%Y-%m-%d %H:%M:%S")
+            send_at = (anchor + timedelta(days=day)).strftime("%Y-%m-%d %H:%M:%S")
+            # Skip if already queued
+            existing = conn.execute(
+                "SELECT 1 FROM followup_queue WHERE lead_id = ? AND sequence_day = ? "
+                "AND status IN ('pending', 'sent')",
+                (lead_id, day),
+            ).fetchone()
+            if existing:
+                continue
             conn.execute(
                 "INSERT INTO followup_queue (lead_id, sequence_day, scheduled_for, status) "
                 "VALUES (?, ?, ?, 'pending')",

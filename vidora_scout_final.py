@@ -1750,7 +1750,7 @@ PATTERN 2 — THE QUIET COMPETITOR DROP:
 Why it works: Specific. Real. Creates tension without alarm.
 
 PATTERN 3 — THE EFFORTLESS CREDENTIAL:
-"We work with Premier League footballers on their personal brand — and a small number of Manchester businesses we think are worth the same level of attention."
+"We produce content for KSI, Premier League footballers and some of the most followed personal brands in the UK. We work with a small number of Manchester businesses we think are ready for that level of production."
 Why it works: Positions without boasting. Selective framing makes the prospect feel chosen not sold to.
 
 PATTERN 4 — THE YES/NO CLOSE:
@@ -1765,7 +1765,7 @@ RULES — never break these:
 - Never mention AI, automation, software or technology
 - Numbers are observed not computed: "67 likes" not "67.0 likes per post"
 - One question only at the close. Yes or no answer.
-- Sign off with first name only. Nothing else.
+- Sign off with "Louis" — nothing else. No title, no website, no phone.
 - Sound like a trusted contact who noticed something useful — not a salesperson who ran a report
 
 SUBJECT LINE:
