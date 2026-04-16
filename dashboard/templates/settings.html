@@ -4,15 +4,16 @@
 <div class="page-head">
     <div>
         <h1>Settings</h1>
-        <div class="subtitle">Credentials, defaults, and data management.</div>
+        <div class="subtitle">Credentials, defaults, branding, and email templates.</div>
     </div>
 </div>
 
 <div class="grid-2">
     <div>
+        {# ---- API + Branding + Pipeline ---- #}
         <div class="panel">
-            <h2>Anthropic API</h2>
             <form method="post">
+                <h2>Anthropic API</h2>
                 <div class="form-group">
                     <label>API key</label>
                     <input type="password" name="anthropic_api_key"
@@ -49,14 +50,150 @@
                     <input type="text" name="instagram_username" value="{{ settings.instagram_username }}"
                            placeholder="Your studio's handle">
                     <div class="form-hint">
-                        Actual Multilogin / Instagram credentials live in the files
+                        Actual Multilogin / Instagram credentials live in
                         <code>C:/vidora/ig_user.txt</code>, <code>C:/vidora/ig_pass.txt</code>,
-                        <code>C:/vidora/pass.txt</code> &mdash; they are never stored in the database.
+                        <code>C:/vidora/pass.txt</code> &mdash; never stored in the database.
                     </div>
                 </div>
 
                 <div class="btn-group">
                     <button type="submit" class="btn primary">Save settings</button>
+                </div>
+            </form>
+        </div>
+
+        {# ---- Sender identity ---- #}
+        <div class="panel">
+            <form method="post">
+                <h2>Sender identity</h2>
+                <div class="form-hint" style="margin-bottom:12px;">
+                    Details that appear in every outreach email footer.
+                </div>
+                <div class="form-group">
+                    <label>Your name</label>
+                    <input type="text" name="sender_name" value="{{ settings.sender_name }}"
+                           placeholder="e.g. James">
+                </div>
+                <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" name="sender_title" value="{{ settings.sender_title }}"
+                           placeholder="e.g. Founder, Innovite">
+                </div>
+                <div class="form-group">
+                    <label>From email</label>
+                    <input type="email" name="sender_email" value="{{ settings.sender_email }}"
+                           placeholder="outreach@innovite.io">
+                    <div class="form-hint">Must match the Zoho account in <code>C:/vidora/zoho_email.txt</code>.</div>
+                </div>
+                <div class="form-group">
+                    <label>Website</label>
+                    <input type="text" name="sender_website" value="{{ settings.sender_website }}"
+                           placeholder="innovite.io">
+                </div>
+                <div class="form-group">
+                    <label>Business address <span class="muted">(UK legal requirement)</span></label>
+                    <input type="text" name="sender_address" value="{{ settings.sender_address }}"
+                           placeholder="123 Example Street, Manchester, M1 1AA">
+                </div>
+                <div class="form-group">
+                    <label>Client company name</label>
+                    <input type="text" name="client_company" value="{{ settings.client_company }}"
+                           placeholder="Vidora Media">
+                    <div class="form-hint">The agency Vidora Media is referred to as in emails and PDFs.</div>
+                </div>
+                <div class="btn-group">
+                    <button type="submit" class="btn primary">Save sender details</button>
+                </div>
+            </form>
+        </div>
+
+        {# ---- Email templates ---- #}
+        <div class="panel">
+            <form method="post">
+                <h2>Email template</h2>
+                <div class="form-hint" style="margin-bottom:12px;">
+                    Placeholders: <code>{business_name}</code> <code>{first_name}</code>
+                    <code>{weakness_1}</code>
+                </div>
+                <div class="form-group">
+                    <label>Subject line</label>
+                    <input type="text" name="email_subject_template"
+                           value="{{ settings.email_subject_template }}">
+                </div>
+                <div class="form-group">
+                    <label>Greeting</label>
+                    <input type="text" name="email_greeting" value="{{ settings.email_greeting }}"
+                           placeholder="Hi {first_name},">
+                </div>
+                <div class="form-group">
+                    <label>Intro line</label>
+                    <textarea name="email_intro" rows="2">{{ settings.email_intro }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Social proof</label>
+                    <textarea name="social_proof" rows="2">{{ settings.social_proof }}</textarea>
+                    <div class="form-hint">Appears after the weakness line — e.g. Premier League footballers quote.</div>
+                </div>
+                <div class="form-group">
+                    <label>CTA line</label>
+                    <input type="text" name="email_cta" value="{{ settings.email_cta }}"
+                           placeholder="Audit ready to send — useful?">
+                </div>
+                <div class="btn-group">
+                    <button type="submit" class="btn primary">Save email template</button>
+                </div>
+            </form>
+        </div>
+
+        {# ---- Follow-up templates ---- #}
+        <div class="panel">
+            <form method="post">
+                <h2>Follow-up sequence</h2>
+                <div class="form-hint" style="margin-bottom:12px;">
+                    Placeholders: <code>{business_name}</code> <code>{maps_review_count}</code>
+                    <code>{maps_rating}</code> <code>{competitor_name}</code>
+                    <code>{business_type}</code> <code>{posting_frequency}</code>
+                    <code>{avg_likes}</code> <code>{sender_name}</code> <code>{sender_website}</code>
+                </div>
+
+                <div style="font-size:12px; font-weight:600; color:var(--gold); margin-bottom:10px;">Day 3 — Competitor reference</div>
+                <div class="form-group">
+                    <label>Subject</label>
+                    <input type="text" name="followup_day3_subject" value="{{ settings.followup_day3_subject }}">
+                </div>
+                <div class="form-group">
+                    <label>Body</label>
+                    <textarea name="followup_day3_body" rows="8">{{ settings.followup_day3_body }}</textarea>
+                </div>
+
+                <div style="font-size:12px; font-weight:600; color:var(--gold); margin:18px 0 10px;">Day 7 — Scarcity close</div>
+                <div class="form-group">
+                    <label>Subject</label>
+                    <input type="text" name="followup_day7_subject" value="{{ settings.followup_day7_subject }}">
+                </div>
+                <div class="form-group">
+                    <label>Body</label>
+                    <textarea name="followup_day7_body" rows="8">{{ settings.followup_day7_body }}</textarea>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn primary">Save follow-up templates</button>
+                </div>
+            </form>
+        </div>
+
+        {# ---- WHO WE ARE (PDF) ---- #}
+        <div class="panel">
+            <form method="post">
+                <h2>Who we are <span class="muted" style="font-weight:400; font-size:12px;">(PDF footer section)</span></h2>
+                <div class="form-hint" style="margin-bottom:12px;">
+                    This paragraph appears at the end of every PDF audit report.
+                </div>
+                <div class="form-group">
+                    <textarea name="who_we_are" rows="6">{{ settings.who_we_are }}</textarea>
+                </div>
+                <div class="btn-group">
+                    <button type="submit" class="btn primary">Save WHO WE ARE</button>
                 </div>
             </form>
         </div>
@@ -87,10 +224,39 @@
                 <dt>Multilogin pass</dt><dd><code>C:/vidora/pass.txt</code></dd>
                 <dt>Instagram user</dt><dd><code>C:/vidora/ig_user.txt</code></dd>
                 <dt>Instagram pass</dt><dd><code>C:/vidora/ig_pass.txt</code></dd>
+                <dt>Zoho email</dt><dd><code>C:/vidora/zoho_email.txt</code></dd>
+                <dt>Zoho password</dt><dd><code>C:/vidora/zoho_pass.txt</code></dd>
                 <dt>Screenshots</dt><dd><code>C:/vidora/screenshots/</code></dd>
-                <dt>SQLite database</dt><dd><code>dashboard/data/vidora.db</code></dd>
-                <dt>PDF audits</dt><dd><code>dashboard/data/audits/</code></dd>
+                <dt>SQLite database</dt><dd><code>C:/vidora/vidora.db</code></dd>
+                <dt>PDF audits</dt><dd><code>C:/vidora/audits/</code></dd>
             </dl>
+        </div>
+
+        <div class="panel">
+            <h2>Email volume</h2>
+            <dl class="kv">
+                <dt>Daily cap</dt><dd>50 emails/day</dd>
+                <dt>SMTP host</dt><dd><code>smtp.zoho.eu:465</code> (SSL)</dd>
+                <dt>Legal</dt><dd>UNSUBSCRIBE footer on every email</dd>
+            </dl>
+        </div>
+
+        <div class="panel">
+            <h2>Discord notifications</h2>
+            <dl class="kv">
+                <dt>Webhook</dt>
+                <dd><code style="font-size:10px; word-break:break-all;">{{ '✅ configured' if discord_webhook else '❌ not set' }}</code></dd>
+                <dt>Alerts</dt><dd>Replies · Run completions · Send failures · Weekly report</dd>
+            </dl>
+            {% if discord_webhook %}
+            <form method="post" action="{{ url_for('api_discord_test') }}" style="margin-top:12px;">
+                <button type="submit" class="btn">Send test message</button>
+            </form>
+            {% else %}
+            <div class="muted" style="font-size:12px; margin-top:8px;">
+                Save your webhook URL to <code>C:/vidora/discord_webhook.txt</code> to enable notifications.
+            </div>
+            {% endif %}
         </div>
 
         <div class="panel">

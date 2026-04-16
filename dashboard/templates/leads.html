@@ -56,6 +56,9 @@
             <th>Business</th>
             <th class="right">Score</th>
             <th class="right">Intent</th>
+            <th class="right">Followers</th>
+            <th class="right">ER</th>
+            <th class="right">Web</th>
             <th>Signals</th>
             <th>Status</th>
             <th>Analysed</th>
@@ -64,6 +67,7 @@
     </thead>
     <tbody>
     {% for l in leads %}
+    {% set wa = l.website_analysis or {} %}
     <tr>
         <td><span class="grade {{ l.lead_grade or 'unknown' }}">{{ l.lead_grade or '?' }}</span></td>
         <td>
@@ -73,6 +77,23 @@
         <td class="muted">{{ l.business_type or '-' }}</td>
         <td class="right num gold">{{ l.overall_score or 0 }}</td>
         <td class="right num">{{ l.business_intent_score or 0 }}/10</td>
+        <td class="right num">
+            {% if l.followers %}
+                {% if l.followers >= 1000000 %}{{ '%.1f'|format(l.followers/1000000) }}M
+                {% elif l.followers >= 1000 %}{{ '%.1f'|format(l.followers/1000) }}K
+                {% else %}{{ l.followers }}{% endif %}
+            {% else %}-{% endif %}
+        </td>
+        <td class="right num muted">
+            {% if l.engagement_rate %}{{ '%.1f'|format(l.engagement_rate * 100) }}%{% else %}-{% endif %}
+        </td>
+        <td class="right num">
+            {% if wa.website_score is defined %}
+                <span style="color:{% if wa.website_score >= 7 %}var(--green){% elif wa.website_score >= 4 %}var(--gold){% else %}var(--red){% endif %};">
+                    {{ wa.website_score }}/10
+                </span>
+            {% else %}-{% endif %}
+        </td>
         <td>
             {% if l.location_match %}<span class="badge location">location</span>{% endif %}
             {% if l.selling_signals %}<span class="badge">{{ l.selling_signals|length }} selling</span>{% endif %}

@@ -23,7 +23,9 @@ from flask import (
     url_for,
 )
 
-from . import db, pipeline
+from . import db, outreach, pipeline
+from .discord import notify_send_failed, notify_run_complete, send_weekly_report, test_webhook
+from .imap_monitor import start_monitor
 from .pdf_audit import generate_audit
 
 DASHBOARD_DIR = Path(__file__).resolve().parent
@@ -39,6 +41,8 @@ def create_app() -> Flask:
     app.secret_key = os.environ.get("VIDORA_SECRET", "vidora-dev-secret-change-me")
 
     db.init_db()
+    outreach.start_scheduler()
+    start_monitor()
 
     @app.context_processor
     def inject_globals():
@@ -112,8 +116,27 @@ def create_app() -> Flask:
         lead = db.get_lead(lead_id)
         if not lead:
             abort(404)
+        settings = db.get_settings()
+        outreach_log = db.get_outreach_log(lead_id)
+        followup_queue = db.get_followup_queue(lead_id)
+        days_sent = db.sequence_days_sent(lead_id)
+        preview_subject = outreach.build_subject(lead, settings)
+        preview_body = outreach.build_body(lead, settings)
+        d3_subj, d3_body = outreach.build_followup_day3(lead, settings)
+        d7_subj, d7_body = outreach.build_followup_day7(lead, settings)
         return render_template(
-            "lead_detail.html", lead=lead, active_page="leads"
+            "lead_detail.html",
+            lead=lead,
+            outreach_log=outreach_log,
+            followup_queue=followup_queue,
+            days_sent=days_sent,
+            preview_subject=preview_subject,
+            preview_body=preview_body,
+            d3_subject=d3_subj,
+            d3_body=d3_body,
+            d7_subject=d7_subj,
+            d7_body=d7_body,
+            active_page="leads",
         )
 
     @app.route("/leads/<int:lead_id>/update", methods=["POST"])
@@ -138,6 +161,51 @@ def create_app() -> Flask:
         flash("Lead deleted.", "success")
         return redirect(url_for("leads"))
 
+    @app.route("/leads/<int:lead_id>/send-email", methods=["POST"])
+    def lead_send_email(lead_id: int):
+        lead = db.get_lead(lead_id)
+        if not lead:
+            abort(404)
+        # Allow overriding the stored email from the form
+        override_email = (request.form.get("email") or "").strip()
+        if override_email:
+            db.update_lead_fields(lead_id, {"email": override_email})
+            lead["email"] = override_email
+        result = outreach.send_lead_email(lead_id)
+        if result["ok"]:
+            flash(result["message"], "success")
+        else:
+            flash(result["message"], "error")
+            lead = db.get_lead(lead_id)
+            if lead:
+                notify_send_failed(lead, 1, result["message"])
+        return redirect(url_for("lead_detail", lead_id=lead_id))
+
+    @app.route("/leads/<int:lead_id>/send-followup/<int:day>", methods=["POST"])
+    def lead_send_followup(lead_id: int, day: int):
+        if not db.get_lead(lead_id):
+            abort(404)
+        result = outreach.send_followup(lead_id, day)
+        flash(result["message"], "success" if result["ok"] else "error")
+        return redirect(url_for("lead_detail", lead_id=lead_id))
+
+    @app.route("/leads/<int:lead_id>/save-email", methods=["POST"])
+    def lead_save_email(lead_id: int):
+        """Save email address (and optional subject) without sending."""
+        if not db.get_lead(lead_id):
+            abort(404)
+        updates = {}
+        email = (request.form.get("email") or "").strip()
+        if email:
+            updates["email"] = email
+        subject = (request.form.get("email_subject") or "").strip()
+        if subject:
+            updates["email_subject"] = subject
+        if updates:
+            db.update_lead_fields(lead_id, updates)
+            flash("Email details saved.", "success")
+        return redirect(url_for("lead_detail", lead_id=lead_id))
+
     @app.route("/leads/<int:lead_id>/audit")
     def lead_audit(lead_id: int):
         lead = db.get_lead(lead_id)
@@ -146,8 +214,8 @@ def create_app() -> Flask:
         path = Path(lead.get("audit_path") or "")
         if not path.exists():
             # Regenerate on demand (useful after CSV imports).
-            company = db.get_setting("company_name", "Vidora")
-            path = generate_audit(lead, AUDITS_DIR, company_name=company)
+            settings = db.get_settings()
+            path = generate_audit(lead, AUDITS_DIR, settings=settings)
             db.update_lead_fields(lead_id, {"audit_path": str(path)})
         return send_file(
             path,
@@ -220,15 +288,37 @@ def create_app() -> Flask:
     def settings_page():
         if request.method == "POST":
             updates = {}
-            for key in (
+            plain_keys = (
                 "company_name",
                 "company_tagline",
                 "default_location",
                 "default_leads_per_run",
                 "instagram_username",
-            ):
+                # Sender identity
+                "sender_name",
+                "sender_title",
+                "sender_email",
+                "sender_website",
+                "sender_address",
+                # Client company
+                "client_company",
+                # Email template
+                "email_subject_template",
+                "email_greeting",
+                "email_intro",
+                "social_proof",
+                "email_cta",
+                # Follow-up sequence
+                "followup_day3_subject",
+                "followup_day3_body",
+                "followup_day7_subject",
+                "followup_day7_body",
+                # PDF
+                "who_we_are",
+            )
+            for key in plain_keys:
                 if key in request.form:
-                    updates[key] = request.form[key].strip()
+                    updates[key] = request.form[key]  # preserve newlines in textarea fields
             api_key = (request.form.get("anthropic_api_key") or "").strip()
             if api_key and not api_key.startswith("*"):
                 updates["anthropic_api_key"] = api_key
@@ -238,10 +328,14 @@ def create_app() -> Flask:
 
         settings = db.get_settings()
         masked_key = _mask(settings.get("anthropic_api_key", ""))
+        from pathlib import Path as _Path
+        _wh = _Path("C:/vidora/discord_webhook.txt")
+        discord_webhook = _wh.read_text(encoding="utf-8").strip() if _wh.exists() else ""
         return render_template(
             "settings.html",
             settings=settings,
             masked_key=masked_key,
+            discord_webhook=discord_webhook,
             active_page="settings",
         )
 
@@ -264,6 +358,46 @@ def create_app() -> Flask:
             except Exception:
                 pass
         return redirect(url_for("settings_page"))
+
+    # -----------------------------------------------------------------------
+    # API endpoints (called by n8n workflows)
+    # -----------------------------------------------------------------------
+
+    @app.route("/api/weekly-report", methods=["POST"])
+    def api_weekly_report():
+        """n8n Workflow 4: POST here on Monday morning to trigger Discord report."""
+        secret = request.headers.get("X-Vidora-Key") or request.args.get("key")
+        if secret != (os.environ.get("VIDORA_SECRET", "vidora-dev-secret-change-me")):
+            return {"ok": False, "error": "unauthorized"}, 401
+        stats = db.weekly_stats()
+        ok = send_weekly_report(stats)
+        return {"ok": ok, "stats": stats}
+
+    @app.route("/api/check-replies", methods=["POST"])
+    def api_check_replies():
+        """n8n Workflow 3: POST here to trigger an immediate inbox check."""
+        secret = request.headers.get("X-Vidora-Key") or request.args.get("key")
+        if secret != (os.environ.get("VIDORA_SECRET", "vidora-dev-secret-change-me")):
+            return {"ok": False, "error": "unauthorized"}, 401
+        from .imap_monitor import check_inbox_for_replies
+        found = check_inbox_for_replies()
+        return {"ok": True, "replies_found": found}
+
+    @app.route("/api/discord-test", methods=["POST"])
+    def api_discord_test():
+        """Send a test message to the Discord webhook."""
+        ok = test_webhook()
+        flash("Discord test message sent." if ok else "Discord webhook failed — check the URL.", "success" if ok else "error")
+        return redirect(url_for("settings_page"))
+
+    @app.route("/api/run-status")
+    def api_run_status():
+        """n8n Workflow 1: returns current pipeline state as JSON."""
+        active = db.active_run()
+        return {
+            "running": pipeline.is_running(),
+            "active_run": dict(active) if active else None,
+        }
 
     @app.errorhandler(404)
     def not_found(_):

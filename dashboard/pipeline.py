@@ -197,6 +197,22 @@ def import_csv(path: Path) -> int:
             raw_selling = row.get("selling_signals") or row.get("selling_signals", "")
             selling_signals = _split(raw_selling) if raw_selling else []
 
+            # Reconstruct website_analysis blob from flattened CSV columns
+            def _bool(v):
+                return (v or "").lower() in ("true", "1", "yes")
+
+            ws_score = row.get("website_score")
+            website_analysis = {}
+            if ws_score not in (None, ""):
+                website_analysis = {
+                    "website_score":      _int(ws_score),
+                    "has_ssl":            _bool(row.get("website_ssl")),
+                    "has_mobile_viewport":_bool(row.get("website_mobile")),
+                    "has_cta":            _bool(row.get("website_cta")),
+                    "load_time_ms":       _int(row.get("website_load_ms")),
+                    "word_count":         _int(row.get("website_word_count")),
+                }
+
             result = {
                 "username":               username,
                 "analysed_at":            row.get("analysed_at"),
@@ -218,6 +234,26 @@ def import_csv(path: Path) -> int:
                                           in ("true", "1", "yes"),
                 "location_signals":       _split(row.get("location_signals")),
                 "selling_signals":        selling_signals,
+                # Instagram profile stats
+                "followers":              _int(row.get("followers")),
+                "following":              _int(row.get("following")),
+                "post_count":             _int(row.get("post_count")),
+                "bio_text":               row.get("bio_text"),
+                "bio_website":            row.get("bio_website"),
+                "avg_likes":              _float(row.get("avg_likes")),
+                "avg_comments":           _float(row.get("avg_comments")),
+                "engagement_rate":        _float(row.get("engagement_rate")),
+                "posting_frequency":      row.get("posting_frequency"),
+                "trend":                  row.get("trend"),
+                "has_link_in_bio":        _bool(row.get("has_link_in_bio")),
+                "last_post_date":         row.get("last_post_date"),
+                "story_highlight_categories": _split(row.get("story_highlights")),
+                # Website analysis (reconstructed from flattened columns)
+                "website_analysis":       website_analysis,
+                # Competitor benchmark (stored as JSON blob in CSV)
+                "competitor_benchmark":   _parse_json(row.get("competitor_benchmark")),
+                # Claude-generated email copy
+                "email_body":             row.get("email_body") or None,
                 # Maps metadata — new format OR master_leads column names
                 "business_name":     row.get("business_name") or row.get("name"),
                 "maps_address":      row.get("maps_address") or row.get("address"),
@@ -286,3 +322,13 @@ def _split(v):
     if not v:
         return []
     return [s.strip() for s in v.split(";") if s.strip()]
+
+
+def _parse_json(v):
+    import json
+    if not v:
+        return {}
+    try:
+        return json.loads(v)
+    except (TypeError, ValueError):
+        return {}

@@ -139,7 +139,7 @@
                 <div class="form-group">
                     <label>Status</label>
                     <select name="status">
-                        {% for s in ['new','contacted','qualified','closed','dead'] %}
+                        {% for s in ['new','contacted','qualified','replied','closed','dead'] %}
                         <option value="{{ s }}" {{ 'selected' if lead.status == s else '' }}>{{ s|capitalize }}</option>
                         {% endfor %}
                     </select>
@@ -153,6 +153,314 @@
                 </div>
             </form>
         </div>
+
+        <div class="panel">
+            <h2>Email outreach</h2>
+
+            {# Contact email save #}
+            <form method="post" action="{{ url_for('lead_save_email', lead_id=lead.id) }}">
+                <div class="form-group">
+                    <label>Contact email</label>
+                    <input type="email" name="email" value="{{ lead.email or '' }}" placeholder="hello@business.com">
+                    <div class="form-hint">Scraped automatically in Maps mode. Edit if needed.</div>
+                </div>
+                <div class="btn-group">
+                    <button type="submit" class="btn">Save email</button>
+                </div>
+            </form>
+
+            <div class="divider"></div>
+
+            {# ---- Day 1 ---- #}
+            <div style="margin-bottom:16px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <div style="font-size:12px; font-weight:600; color:var(--gold);">
+                        Day 1 — Initial
+                        {% if 1 in days_sent %}<span class="badge" style="color:var(--green); border-color:var(--green); margin-left:8px;">sent</span>{% endif %}
+                    </div>
+                </div>
+                <div style="font-size:11px; color:var(--muted); margin-bottom:4px;"><strong>Subject:</strong> {{ preview_subject }}</div>
+                <pre style="font-size:11px; line-height:1.6; white-space:pre-wrap; color:var(--text); background:var(--bg); padding:10px; border-radius:4px; border:1px solid var(--border); margin:0 0 8px;">{{ preview_body }}</pre>
+                {% if 1 not in days_sent %}
+                <form method="post" action="{{ url_for('lead_send_email', lead_id=lead.id) }}"
+                      onsubmit="return confirm('Send Day 1 email to {{ lead.email or "?" }}?');">
+                    <input type="hidden" name="email" value="{{ lead.email or '' }}">
+                    <button type="submit" class="btn primary" {{ 'disabled' if not lead.email else '' }}>
+                        &#9993; Send Day 1{% if not lead.email %} — add email first{% endif %}
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+
+            {# ---- Day 3 ---- #}
+            <div style="margin-bottom:16px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <div style="font-size:12px; font-weight:600; color:var(--gold);">
+                        Day 3 — Competitor reference
+                        {% if 3 in days_sent %}<span class="badge" style="color:var(--green); border-color:var(--green); margin-left:8px;">sent</span>
+                        {% else %}
+                            {% for q in followup_queue if q.sequence_day == 3 %}
+                                <span class="muted" style="font-size:11px; margin-left:8px;">scheduled {{ q.scheduled_for[:10] }}</span>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                <div style="font-size:11px; color:var(--muted); margin-bottom:4px;"><strong>Subject:</strong> {{ d3_subject }}</div>
+                <pre style="font-size:11px; line-height:1.6; white-space:pre-wrap; color:var(--text); background:var(--bg); padding:10px; border-radius:4px; border:1px solid var(--border); margin:0 0 8px;">{{ d3_body }}</pre>
+                {% if 3 not in days_sent and 1 in days_sent %}
+                <form method="post" action="{{ url_for('lead_send_followup', lead_id=lead.id, day=3) }}"
+                      onsubmit="return confirm('Send Day 3 follow-up now?');">
+                    <button type="submit" class="btn">Send Day 3 now</button>
+                </form>
+                {% elif 1 not in days_sent %}
+                <div class="muted" style="font-size:11px;">Send Day 1 first.</div>
+                {% endif %}
+            </div>
+
+            {# ---- Day 7 ---- #}
+            <div style="margin-bottom:16px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <div style="font-size:12px; font-weight:600; color:var(--gold);">
+                        Day 7 — Scarcity close
+                        {% if 7 in days_sent %}<span class="badge" style="color:var(--green); border-color:var(--green); margin-left:8px;">sent</span>
+                        {% else %}
+                            {% for q in followup_queue if q.sequence_day == 7 %}
+                                <span class="muted" style="font-size:11px; margin-left:8px;">scheduled {{ q.scheduled_for[:10] }}</span>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                <div style="font-size:11px; color:var(--muted); margin-bottom:4px;"><strong>Subject:</strong> {{ d7_subject }}</div>
+                <pre style="font-size:11px; line-height:1.6; white-space:pre-wrap; color:var(--text); background:var(--bg); padding:10px; border-radius:4px; border:1px solid var(--border); margin:0 0 8px;">{{ d7_body }}</pre>
+                {% if 7 not in days_sent and 1 in days_sent %}
+                <form method="post" action="{{ url_for('lead_send_followup', lead_id=lead.id, day=7) }}"
+                      onsubmit="return confirm('Send Day 7 follow-up now?');">
+                    <button type="submit" class="btn">Send Day 7 now</button>
+                </form>
+                {% elif 1 not in days_sent %}
+                <div class="muted" style="font-size:11px;">Send Day 1 first.</div>
+                {% endif %}
+            </div>
+
+            {# Outreach history #}
+            {% if outreach_log %}
+            <div class="divider"></div>
+            <div style="margin-top:14px;">
+                <div class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px;">Send history</div>
+                <table class="data" style="font-size:11px;">
+                    <thead>
+                        <tr><th>Day</th><th>Sent</th><th>To</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for log in outreach_log %}
+                    <tr>
+                        <td class="gold">Day {{ log.sequence_day or 1 }}</td>
+                        <td class="muted">{{ log.sent_at[:16] }}</td>
+                        <td>{{ log.to_email }}</td>
+                        <td>
+                            {% if log.status == 'sent' %}
+                                <span class="badge" style="color:var(--green); border-color:var(--green);">sent</span>
+                            {% elif log.status == 'failed' %}
+                                <span class="badge" style="color:var(--red); border-color:var(--red);" title="{{ log.error or '' }}">failed</span>
+                            {% else %}
+                                <span class="muted">{{ log.status }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ── Instagram stats panel ─────────────────────────────────────── #}
+        {% if lead.followers %}
+        <div class="panel">
+            <h2>Instagram stats</h2>
+            <dl class="kv">
+                <dt>Followers</dt>
+                <dd class="gold">
+                    {% if lead.followers >= 1000000 %}{{ '%.1f'|format(lead.followers/1000000) }}M
+                    {% elif lead.followers >= 1000 %}{{ '%.1f'|format(lead.followers/1000) }}K
+                    {% else %}{{ lead.followers }}{% endif %}
+                </dd>
+                {% if lead.following %}
+                <dt>Following</dt><dd>{{ lead.following }}</dd>
+                {% endif %}
+                {% if lead.post_count %}
+                <dt>Posts</dt><dd>{{ lead.post_count }}</dd>
+                {% endif %}
+                {% if lead.engagement_rate %}
+                <dt>Engagement rate</dt>
+                <dd style="color:{% if lead.engagement_rate >= 0.03 %}var(--green){% elif lead.engagement_rate >= 0.01 %}var(--gold){% else %}var(--red){% endif %};">
+                    {{ '%.2f'|format(lead.engagement_rate * 100) }}%
+                </dd>
+                {% endif %}
+                {% if lead.posting_frequency %}
+                <dt>Posting frequency</dt><dd>{{ lead.posting_frequency }}</dd>
+                {% endif %}
+                {% if lead.trend %}
+                <dt>Trend</dt>
+                <dd>
+                    {% if lead.trend == 'growing' %}<span style="color:var(--green);">&#8599; Growing</span>
+                    {% elif lead.trend == 'declining' %}<span style="color:var(--red);">&#8600; Declining</span>
+                    {% else %}<span class="muted">&#8594; Stable</span>{% endif %}
+                </dd>
+                {% endif %}
+                {% if lead.last_post_date %}
+                <dt>Last post</dt><dd class="muted">{{ lead.last_post_date[:10] }}</dd>
+                {% endif %}
+                <dt>Link in bio</dt>
+                <dd>{% if lead.has_link_in_bio %}<span style="color:var(--green);">Yes</span>{% else %}<span class="muted">No</span>{% endif %}</dd>
+            </dl>
+        </div>
+        {% endif %}
+
+        {# ── Website analysis panel ────────────────────────────────────── #}
+        {% set wa = lead.website_analysis or {} %}
+        {% if wa and wa.website_score is defined %}
+        <div class="panel">
+            <h2>Website analysis
+                <span style="float:right; font-size:22px; font-weight:700;
+                    color:{% if wa.website_score >= 7 %}var(--green){% elif wa.website_score >= 4 %}var(--gold){% else %}var(--red){% endif %};">
+                    {{ wa.website_score }}/10
+                </span>
+            </h2>
+            <dl class="kv">
+                <dt>SSL (HTTPS)</dt>
+                <dd>{% if wa.has_ssl %}<span style="color:var(--green);">&#10003; Yes</span>{% else %}<span style="color:var(--red);">&#10007; No</span>{% endif %}</dd>
+                <dt>Mobile viewport</dt>
+                <dd>{% if wa.has_mobile_viewport %}<span style="color:var(--green);">&#10003; Yes</span>{% else %}<span style="color:var(--red);">&#10007; No</span>{% endif %}</dd>
+                <dt>Load time</dt>
+                <dd>
+                    {% if wa.load_time_ms %}
+                        <span style="color:{% if wa.load_time_ms < 3000 %}var(--green){% elif wa.load_time_ms < 6000 %}var(--gold){% else %}var(--red){% endif %};">
+                            {{ wa.load_time_ms }}ms
+                        </span>
+                    {% else %}-{% endif %}
+                </dd>
+                <dt>CTA button</dt>
+                <dd>{% if wa.has_cta %}<span style="color:var(--green);">&#10003; Yes</span>{% else %}<span style="color:var(--red);">&#10007; No</span>{% endif %}</dd>
+                <dt>Contact info</dt>
+                <dd>{% if wa.has_contact_info %}<span style="color:var(--green);">&#10003; Yes</span>{% else %}<span style="color:var(--red);">&#10007; No</span>{% endif %}</dd>
+                <dt>Title tag</dt>
+                <dd>{% if wa.has_title_tag %}<span style="color:var(--green);">&#10003; Yes</span>{% else %}<span style="color:var(--red);">&#10007; No</span>{% endif %}</dd>
+                <dt>Meta description</dt>
+                <dd>{% if wa.has_meta_description %}<span style="color:var(--green);">&#10003; Yes</span>{% else %}<span style="color:var(--red);">&#10007; No</span>{% endif %}</dd>
+                <dt>Word count</dt>
+                <dd>{{ wa.word_count or 0 }} words</dd>
+            </dl>
+            {% if wa.top_weaknesses %}
+            <div style="margin-top:12px;">
+                <div class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Top weaknesses</div>
+                <ul class="bullet-list">
+                    {% for w in wa.top_weaknesses %}<li style="color:var(--red);">{{ w }}</li>{% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# ── Competitor benchmark panel ────────────────────────────────── #}
+        {% set bench = lead.competitor_benchmark or {} %}
+        {% if bench and bench.ranking_table %}
+        <div class="panel">
+            <h2>Competitor benchmark
+                {% if bench.target_rank %}
+                <span style="float:right; font-size:13px; font-weight:600;
+                    color:{% if bench.target_rank == 1 %}var(--green){% elif bench.target_rank == 2 %}var(--gold){% else %}var(--red){% endif %};">
+                    Rank {{ bench.target_rank }}/{{ bench.ranking_table|length }}
+                </span>
+                {% endif %}
+            </h2>
+
+            {# Build column headers from ranking_table #}
+            {% set table = bench.ranking_table %}
+            <div style="overflow-x:auto;">
+            <table class="data" style="font-size:11px; margin-bottom:10px;">
+                <thead>
+                    <tr>
+                        <th>Dimension</th>
+                        {% for row in table %}
+                        <th class="right" style="{% if row.name == (lead.full_name or lead.username) %}color:var(--gold);{% endif %}">
+                            {{ row.name[:15] }}{% if row.name|length > 15 %}…{% endif %}
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="muted">Content score</td>
+                        {% for row in table %}
+                        <td class="right num {% if row.name == (lead.full_name or lead.username) %}gold{% endif %}">
+                            {{ '%.0f'|format((row.content_score or 0) * 10) }}/10
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    <tr>
+                        <td class="muted">Website score</td>
+                        {% for row in table %}
+                        <td class="right num {% if row.name == (lead.full_name or lead.username) %}gold{% endif %}">
+                            {{ row.website_score or '-' }}/10
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    <tr>
+                        <td class="muted">Google rating</td>
+                        {% for row in table %}
+                        <td class="right num {% if row.name == (lead.full_name or lead.username) %}gold{% endif %}">
+                            {{ row.maps_rating or '-' }}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    <tr>
+                        <td class="muted">Google reviews</td>
+                        {% for row in table %}
+                        <td class="right num {% if row.name == (lead.full_name or lead.username) %}gold{% endif %}">
+                            {{ row.maps_review_count or '-' }}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    <tr>
+                        <td class="muted">IG followers</td>
+                        {% for row in table %}
+                        <td class="right num {% if row.name == (lead.full_name or lead.username) %}gold{% endif %}">
+                            {% if row.ig_followers %}
+                                {% if row.ig_followers >= 1000000 %}{{ '%.1f'|format(row.ig_followers/1000000) }}M
+                                {% elif row.ig_followers >= 1000 %}{{ '%.1f'|format(row.ig_followers/1000) }}K
+                                {% else %}{{ row.ig_followers }}{% endif %}
+                            {% else %}-{% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    <tr style="border-top:1px solid var(--border);">
+                        <td style="font-weight:600;">Rank</td>
+                        {% for row in table %}
+                        <td class="right num" style="font-weight:600; color:{% if row.rank == 1 %}var(--green){% elif row.rank == 2 %}var(--gold){% else %}var(--red){% endif %};">
+                            #{{ row.rank }}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+
+            {% if bench.top_competitor_name %}
+            <div class="muted" style="font-size:11px; line-height:1.6;">
+                Top competitor: <strong style="color:var(--text);">{{ bench.top_competitor_name }}</strong>
+                {% if bench.gap_to_top and bench.gap_to_top > 0 %}
+                — composite gap: <span style="color:var(--red);">{{ '%.0f'|format(bench.gap_to_top * 100) }}pts</span>
+                {% elif bench.target_rank == 1 %}
+                — <span style="color:var(--green);">you are leading</span>
+                {% endif %}
+                {% if bench.biggest_advantage_dimension %}
+                &middot; Biggest advantage: <strong>{{ bench.biggest_advantage_dimension }}</strong>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
 
         <div class="panel">
             <h2>Danger zone</h2>

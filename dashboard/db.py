@@ -53,6 +53,19 @@ CREATE TABLE IF NOT EXISTS leads (
     maps_review_count TEXT,
     maps_url TEXT,
     maps_place_id TEXT,
+    email TEXT,
+    email_subject TEXT,
+    followers INTEGER,
+    following INTEGER,
+    post_count INTEGER,
+    bio_text TEXT,
+    bio_website TEXT,
+    avg_likes REAL,
+    avg_comments REAL,
+    engagement_rate REAL,
+    posting_frequency TEXT,
+    competitors TEXT,           -- JSON array of competitor dicts
+    competitor_avg_score REAL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -60,6 +73,27 @@ CREATE TABLE IF NOT EXISTS leads (
 CREATE INDEX IF NOT EXISTS idx_leads_grade ON leads(lead_grade);
 CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority_flag);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
+
+CREATE TABLE IF NOT EXISTS outreach_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lead_id INTEGER NOT NULL,
+    sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    to_email TEXT,
+    subject TEXT,
+    sequence_day INTEGER DEFAULT 1,   -- 1 / 3 / 7
+    status TEXT DEFAULT 'pending',    -- pending / sent / failed
+    error TEXT,
+    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS followup_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lead_id INTEGER NOT NULL,
+    sequence_day INTEGER NOT NULL,         -- 3 or 7
+    scheduled_for TEXT NOT NULL,           -- ISO datetime YYYY-MM-DD HH:MM:SS
+    status TEXT DEFAULT 'pending',         -- pending / sent / cancelled
+    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+);
 
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,11 +141,102 @@ def init_db() -> None:
             "default_leads_per_run": "10",
             "company_name": "Vidora",
             "company_tagline": "AI lead generation for media production",
+            # Sender identity
+            "sender_name": "",
+            "sender_title": "Innovite",
+            "sender_email": "louis@innovite.io",
+            "sender_website": "innovite.io",
+            "sender_address": "",
+            # Client company
+            "client_company": "Vidora Media",
+            # Email template parts
+            "email_subject_template": "Our system flagged {business_name}'s Instagram",
+            "email_greeting": "Hi {first_name},",
+            "email_intro": "I run Innovite - a content evaluation platform used by media agencies across the UK.",
+            "social_proof": "Vidora Media, who work with Premier League footballers, specialise in exactly this.",
+            "email_cta": "Audit ready to send - useful?",
+            # Follow-up sequence templates
+            "followup_day3_subject": "{business_name} - what {competitor_name} are doing differently",
+            "followup_day3_body": (
+                "{business_name} has {maps_review_count} reviews sitting completely unused on Instagram "
+                "while {competitor_name} one mile away is actively converting theirs into bookings.\n\n"
+                "{competitor_name} uses their Story Highlights as a consultation funnel - their Reviews "
+                "highlight turns their Google reputation into social proof that a patient sees before "
+                "they ever send a DM.\n\n"
+                "One restructured bio and a Reviews highlight costs nothing to set up - what determines "
+                "whether patients act on it is the quality of the content sitting behind it.\n\n"
+                "That the piece worth fixing - yes or no?\n\n"
+                "{sender_name}\n{sender_title}\n{sender_website}\n\n"
+                "To opt out reply UNSUBSCRIBE."
+            ),
+            "followup_day7_subject": "two Manchester {business_type}s - one spot left",
+            "followup_day7_body": (
+                "Taking on two Manchester {business_type}s for production content this month - "
+                "one is confirmed, one spot is still open.\n\n"
+                "{business_name} fits exactly the profile that works: strong offline reputation, "
+                "consistent posting schedule, engagement that hasn't caught up yet.\n\n"
+                "A practice with {maps_review_count} reviews has already done the hard part "
+                "- the content is what's missing.\n\n"
+                "Is that second spot for {business_name} - yes or no?\n\n"
+                "{sender_name}\n{sender_title}\n{sender_website}\n\n"
+                "To opt out reply UNSUBSCRIBE."
+            ),
+            # PDF WHO WE ARE section
+            "who_we_are": (
+                "Innovite is a content intelligence platform used by media production agencies "
+                "to identify high potential clients. Vidora Media uses our platform to evaluate "
+                "Instagram content across Manchester businesses. Your business was flagged as "
+                "high potential - strong presence but with production gaps limiting growth. "
+                "This report is the same evaluation Vidora Media runs on every prospective client."
+            ),
         }
         for k, v in defaults.items():
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v)
             )
+    _ensure_columns()
+
+
+def _ensure_columns() -> None:
+    """Add any columns that exist in the schema but not in the live DB (safe migration)."""
+    new_cols = {
+        "leads": [
+            ("email", "TEXT"),
+            ("email_subject", "TEXT"),
+            ("followers", "INTEGER"),
+            ("following", "INTEGER"),
+            ("post_count", "INTEGER"),
+            ("bio_text", "TEXT"),
+            ("bio_website", "TEXT"),
+            ("avg_likes", "REAL"),
+            ("avg_comments", "REAL"),
+            ("engagement_rate", "REAL"),
+            ("posting_frequency", "TEXT"),
+            ("competitors", "TEXT"),
+            ("competitor_avg_score", "REAL"),
+            ("has_link_in_bio", "INTEGER DEFAULT 0"),
+            ("last_post_date", "TEXT"),
+            ("story_highlight_categories", "TEXT"),
+            ("trend", "TEXT"),
+            ("website_analysis", "TEXT"),
+            ("competitor_benchmark", "TEXT"),
+            ("email_body", "TEXT"),
+        ],
+        "outreach_log": [
+            ("sequence_day", "INTEGER DEFAULT 1"),
+        ],
+    }
+    with connection() as conn:
+        for table, cols in new_cols.items():
+            existing = {
+                row[1]
+                for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            for col_name, col_type in cols:
+                if col_name not in existing:
+                    conn.execute(
+                        f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +318,26 @@ def upsert_lead_from_pipeline(result: dict) -> int:
         "maps_review_count": str(result["maps_review_count"]) if result.get("maps_review_count") is not None else None,
         "maps_url": result.get("maps_url"),
         "maps_place_id": result.get("maps_place_id"),
+        "email": result.get("email"),
+        "email_subject": result.get("email_subject"),
+        "followers": result.get("followers"),
+        "following": result.get("following"),
+        "post_count": result.get("post_count"),
+        "bio_text": result.get("bio_text"),
+        "bio_website": result.get("bio_website"),
+        "avg_likes": result.get("avg_likes"),
+        "avg_comments": result.get("avg_comments"),
+        "engagement_rate": result.get("engagement_rate"),
+        "posting_frequency": result.get("posting_frequency"),
+        "competitors": _to_json(result.get("competitors", [])),
+        "competitor_avg_score": result.get("competitor_avg_score"),
+        "has_link_in_bio": 1 if result.get("has_link_in_bio") else 0,
+        "last_post_date": result.get("last_post_date"),
+        "story_highlight_categories": _to_json(result.get("story_highlight_categories", [])),
+        "trend": result.get("trend"),
+        "website_analysis": _to_json(result.get("website_analysis") or {}),
+        "competitor_benchmark": _to_json(result.get("competitor_benchmark") or {}),
+        "email_body": result.get("email_body"),
     }
 
     cols = list(row.keys())
@@ -294,7 +439,8 @@ def delete_lead(lead_id: int) -> None:
 
 def _row_to_lead(row: sqlite3.Row) -> dict:
     d = dict(row)
-    for field in ("weaknesses", "strengths", "location_signals", "selling_signals"):
+    for field in ("weaknesses", "strengths", "location_signals", "selling_signals",
+                  "competitors", "story_highlight_categories"):
         raw = d.get(field) or "[]"
         try:
             d[field] = json.loads(raw)
@@ -302,6 +448,19 @@ def _row_to_lead(row: sqlite3.Row) -> dict:
             d[field] = []
     d["priority_flag"] = bool(d.get("priority_flag"))
     d["location_match"] = bool(d.get("location_match"))
+    d["has_link_in_bio"] = bool(d.get("has_link_in_bio"))
+    # Deserialise website_analysis JSON blob
+    wa_raw = d.get("website_analysis") or "{}"
+    try:
+        d["website_analysis"] = json.loads(wa_raw)
+    except (TypeError, ValueError):
+        d["website_analysis"] = {}
+    # Deserialise competitor_benchmark JSON blob
+    cb_raw = d.get("competitor_benchmark") or "{}"
+    try:
+        d["competitor_benchmark"] = json.loads(cb_raw)
+    except (TypeError, ValueError):
+        d["competitor_benchmark"] = {}
     return d
 
 
@@ -342,6 +501,41 @@ def dashboard_stats() -> dict:
         "contacted": contacted,
         "location_matches": location_matches,
         "latest_run": dict(latest_run) if latest_run else None,
+    }
+
+
+def weekly_stats() -> dict:
+    """Stats for the past 7 days — used by Discord weekly report."""
+    with connection() as conn:
+        leads_this_week = conn.execute(
+            "SELECT COUNT(*) AS n FROM leads WHERE analysed_at >= datetime('now', '-7 days')"
+        ).fetchone()["n"]
+        emails_this_week = conn.execute(
+            "SELECT COUNT(*) AS n FROM outreach_log "
+            "WHERE status = 'sent' AND sent_at >= datetime('now', '-7 days')"
+        ).fetchone()["n"]
+        replies_this_week = conn.execute(
+            "SELECT COUNT(*) AS n FROM outreach_log "
+            "WHERE status = 'replied' AND sent_at >= datetime('now', '-7 days')"
+        ).fetchone()["n"]
+        total_leads = conn.execute("SELECT COUNT(*) AS n FROM leads").fetchone()["n"]
+        contacted = conn.execute(
+            "SELECT COUNT(*) AS n FROM leads WHERE status != 'new'"
+        ).fetchone()["n"]
+        qualified = conn.execute(
+            "SELECT COUNT(*) AS n FROM leads WHERE status = 'qualified'"
+        ).fetchone()["n"]
+        replied = conn.execute(
+            "SELECT COUNT(*) AS n FROM leads WHERE status = 'replied'"
+        ).fetchone()["n"]
+    return {
+        "leads_this_week": leads_this_week,
+        "emails_this_week": emails_this_week,
+        "replies_this_week": replies_this_week,
+        "total_leads": total_leads,
+        "contacted": contacted,
+        "qualified": qualified,
+        "replied": replied,
     }
 
 
@@ -405,3 +599,95 @@ def active_run() -> dict | None:
             "SELECT * FROM runs WHERE status = 'running' ORDER BY id DESC LIMIT 1"
         ).fetchone()
     return dict(row) if row else None
+
+
+# ---------------------------------------------------------------------------
+# Outreach log
+# ---------------------------------------------------------------------------
+
+def update_outreach_log(log_id: int, status: str, error: str | None = None) -> None:
+    with connection() as conn:
+        conn.execute(
+            "UPDATE outreach_log SET status = ?, error = ? WHERE id = ?",
+            (status, error, log_id),
+        )
+
+
+def get_outreach_log(lead_id: int) -> list[dict]:
+    with connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM outreach_log WHERE lead_id = ? ORDER BY id DESC",
+            (lead_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def log_outreach(lead_id: int, to_email: str, subject: str, sequence_day: int = 1) -> int:
+    """Create a pending outreach log entry. Returns the log entry id."""
+    with connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO outreach_log (lead_id, to_email, subject, sequence_day, status) "
+            "VALUES (?, ?, ?, ?, 'pending')",
+            (lead_id, to_email, subject, sequence_day),
+        )
+        return cur.lastrowid
+
+
+# ---------------------------------------------------------------------------
+# Follow-up queue
+# ---------------------------------------------------------------------------
+
+def schedule_followups(lead_id: int) -> None:
+    """Queue Day 3 and Day 7 follow-ups after a successful Day 1 send."""
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    with connection() as conn:
+        for day in (3, 7):
+            send_at = (now + timedelta(days=day)).strftime("%Y-%m-%d %H:%M:%S")
+            conn.execute(
+                "INSERT INTO followup_queue (lead_id, sequence_day, scheduled_for, status) "
+                "VALUES (?, ?, ?, 'pending')",
+                (lead_id, day, send_at),
+            )
+
+
+def get_due_followups() -> list[dict]:
+    """Return all pending follow-ups whose scheduled_for time has passed."""
+    from datetime import datetime
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with connection() as conn:
+        rows = conn.execute(
+            "SELECT fq.*, l.email, l.username, l.business_name "
+            "FROM followup_queue fq "
+            "JOIN leads l ON l.id = fq.lead_id "
+            "WHERE fq.status = 'pending' AND fq.scheduled_for <= ?",
+            (now,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_followup(queue_id: int, status: str) -> None:
+    with connection() as conn:
+        conn.execute(
+            "UPDATE followup_queue SET status = ? WHERE id = ?",
+            (status, queue_id),
+        )
+
+
+def get_followup_queue(lead_id: int) -> list[dict]:
+    with connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM followup_queue WHERE lead_id = ? ORDER BY sequence_day",
+            (lead_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def sequence_days_sent(lead_id: int) -> set[int]:
+    """Return the set of sequence days that have been successfully sent for this lead."""
+    with connection() as conn:
+        rows = conn.execute(
+            "SELECT sequence_day FROM outreach_log WHERE lead_id = ? AND status = 'sent'",
+            (lead_id,),
+        ).fetchall()
+    return {r["sequence_day"] for r in rows}
