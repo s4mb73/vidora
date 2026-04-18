@@ -186,6 +186,10 @@ def init_db() -> None:
             # templates themselves. Empty by default; Claude uses its built-in
             # premium-outreach patterns.
             "email_voice_guidance": "",
+            # Business context — what the user's business does, who they serve,
+            # offer details. Also injected into the email-generation prompt so
+            # Claude writes from an informed position.
+            "business_context": "",
             # Follow-up sequence templates
             "followup_day3_subject": "{business_name} - what {competitor_name} are doing differently",
             "followup_day3_body": "",

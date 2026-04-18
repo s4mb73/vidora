@@ -27,27 +27,45 @@
 
 <form method="post">
     <div class="panel">
+        <h2 style="margin-top:0;">About your business</h2>
         <div class="form-group">
-            <label>Voice &amp; angle guidance</label>
-            <textarea name="email_voice_guidance" rows="12"
-                      placeholder="Examples of what to put here:
+            <label>What you do, who you serve, what you're offering</label>
+            <textarea name="business_context" rows="8"
+                      placeholder="Example:
 
-• 'Keep it direct and confident. No hedging words. Sound like a friend who noticed something, not a salesperson.'
+We're a video production agency in Manchester. We produce short-form vertical content (Reels, TikToks, YouTube Shorts) for premium service businesses — dental clinics, aesthetic practices, and private healthcare.
 
-• 'Always mention video production specifically — we don't do photography, graphic design, or written content.'
+A typical engagement is a 3-month production retainer at £4,000/month, delivering 8-12 videos per month. We handle concepts, shoots, editing, and posting-ready exports.
 
-• 'Prefer British spelling. Drop contractions (it is, not it's). Never open with a question.'
-
-• 'Our angle is ROI-focused. Frame everything around patient acquisition, not brand awareness.'">{{ settings.email_voice_guidance }}</textarea>
+Ideal clients already have a reputation offline (200+ Google reviews) but are failing to convert it on social. We don't suit clinics just starting out with no online presence.">{{ settings.business_context }}</textarea>
             <div class="form-hint">
-                Free-form. One paragraph or a bulleted list. Claude will read this
-                before writing each email. No placeholder codes needed.
+                Gives Claude the facts about what you're pitching.
+                Include your offer, price range, ideal-client profile, and who you're
+                <em>not</em> right for.
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2 style="margin-top:0;">Voice &amp; tone</h2>
+        <div class="form-group">
+            <label>How you want the emails to sound</label>
+            <textarea name="email_voice_guidance" rows="8"
+                      placeholder="Example:
+
+• Direct and confident. No hedging words. Sound like a friend who noticed something, not a salesperson.
+• Prefer British spelling. Drop contractions (it is, not it's). Never open with a question.
+• Never say 'solutions', 'leverage', 'utilise', 'streamline', 'exciting'.
+• One clear yes/no ask at the close. No calendar links, no 'quick call?'.">{{ settings.email_voice_guidance }}</textarea>
+            <div class="form-hint">
+                Tone, phrasing preferences, hard rules. Different from business
+                facts above — this shapes <em>how</em> it sounds, not what it says.
             </div>
         </div>
     </div>
 
     <div class="btn-group">
-        <button type="submit" class="btn primary">Save voice</button>
+        <button type="submit" class="btn primary">Save</button>
         <a href="{{ url_for('settings_page') }}" class="btn ghost">Cancel</a>
     </div>
 </form>

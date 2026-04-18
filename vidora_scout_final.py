@@ -1704,8 +1704,8 @@ Respond ONLY in this JSON (no markdown):
         print(f"  Pitch enrichment failed (keeping original): {e}")
 
 
-def _get_voice_guidance() -> str:
-    """Read optional user voice guidance from the dashboard settings DB.
+def _get_kb_setting(key: str) -> str:
+    """Read an optional knowledge-base setting from the dashboard DB.
 
     Returns "" if unset or the DB is missing. Never raises — email generation
     must still work if the dashboard isn't installed.
@@ -1714,12 +1714,20 @@ def _get_voice_guidance() -> str:
         import sqlite3
         conn = sqlite3.connect("C:/vidora/vidora.db")
         row = conn.execute(
-            "SELECT value FROM settings WHERE key = 'email_voice_guidance'"
+            "SELECT value FROM settings WHERE key = ?", (key,)
         ).fetchone()
         conn.close()
         return (row[0] or "").strip() if row else ""
     except Exception:
         return ""
+
+
+def _get_voice_guidance() -> str:
+    return _get_kb_setting("email_voice_guidance")
+
+
+def _get_business_context() -> str:
+    return _get_kb_setting("business_context")
 
 
 def _generate_email(result: dict, claude) -> None:
@@ -1764,14 +1772,19 @@ Competitor website score: {comp1_ws or 'unknown'}
 Our rank: {bench.get('target_rank') or 'unknown'} out of {total} in this area"""
 
     voice = _get_voice_guidance()
+    business = _get_business_context()
+    business_section = (
+        f"\n\nABOUT THE BUSINESS YOU'RE WRITING FOR (use these facts, never contradict them):\n{business}\n"
+        if business else ""
+    )
     voice_section = (
-        f"\n\nVOICE GUIDANCE (from the user — honour this when writing):\n{voice}\n"
+        f"\n\nVOICE GUIDANCE (honour this when writing):\n{voice}\n"
         if voice else ""
     )
 
     system_prompt = f"""You write cold emails for a premium outreach business.
 Your emails get replies because they feel like they were written by a person who actually looked — not a tool that ran a report.
-{voice_section}
+{business_section}{voice_section}
 Study these high performing patterns before writing:
 
 PATTERN 1 — THE SPECIFIC OBSERVATION:

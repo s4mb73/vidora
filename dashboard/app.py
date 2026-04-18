@@ -377,9 +377,11 @@ def create_app() -> Flask:
                 if account_missing else ("ready", "All credentials and sender details set.")
             ),
             "emails": (
-                ("ready", "Voice guidance set — Claude will honour it.")
-                if has("email_voice_guidance")
-                else ("empty", "Claude uses its built-in voice. Add guidance to shape tone.")
+                ("ready", "Business context and voice set.")
+                if (has("business_context") and has("email_voice_guidance"))
+                else ("warn", "Add your business context — Claude writes better emails with it.")
+                if not has("business_context")
+                else ("ready", "Voice set. Consider adding business context for more specificity.")
             ),
             "followups": (
                 ("ready", "Custom follow-up copy set.")
@@ -440,7 +442,7 @@ def create_app() -> Flask:
     @app.route("/settings/emails", methods=["GET", "POST"])
     def settings_emails():
         if request.method == "POST":
-            _save_fields(("email_voice_guidance",), dest="emails")
+            _save_fields(("email_voice_guidance", "business_context"), dest="emails")
             return redirect(url_for("settings_emails"))
         return render_template(
             "settings_emails.html",
