@@ -181,6 +181,11 @@ def init_db() -> None:
             "email_intro": "I run Innovite - a content evaluation platform used by media agencies across the UK.",
             "social_proof": "Vidora Media, who work with Premier League footballers, specialise in exactly this.",
             "email_cta": "Audit ready to send - useful?",
+            # Voice guidance — free-form paragraph injected into the Claude
+            # email-generation prompt so the user shapes tone without writing
+            # templates themselves. Empty by default; Claude uses its built-in
+            # premium-outreach patterns.
+            "email_voice_guidance": "",
             # Follow-up sequence templates
             "followup_day3_subject": "{business_name} - what {competitor_name} are doing differently",
             "followup_day3_body": "",

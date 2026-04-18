@@ -33,6 +33,43 @@
         </div>
     </div>
 
+    <div class="panel">
+        <h2>Fallback email template</h2>
+        <div class="form-hint" style="margin-bottom:14px;">
+            <strong>Most users should leave this blank.</strong>
+            These fields are only used if Claude's per-lead email generation fails
+            (e.g. API outage). To shape the voice of the emails Claude writes, use
+            the <a href="{{ url_for('settings_emails') }}">Email voice</a> page instead.
+            Placeholders supported: <code>{business_name}</code>, <code>{first_name}</code>,
+            <code>{competitor_name}</code>, <code>{maps_review_count}</code>,
+            <code>{avg_likes}</code>, <code>{sender_name}</code>.
+        </div>
+        <div class="form-group">
+            <label>Subject line template</label>
+            <input type="text" name="email_subject_template"
+                   value="{{ settings.email_subject_template }}"
+                   placeholder="{business_name} - quick question">
+        </div>
+        <div class="form-group">
+            <label>Greeting</label>
+            <input type="text" name="email_greeting" value="{{ settings.email_greeting }}"
+                   placeholder="Hi {first_name},">
+        </div>
+        <div class="form-group">
+            <label>Intro line</label>
+            <textarea name="email_intro" rows="2">{{ settings.email_intro }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>Social proof</label>
+            <textarea name="social_proof" rows="3">{{ settings.social_proof }}</textarea>
+        </div>
+        <div class="form-group">
+            <label>Call-to-action line</label>
+            <input type="text" name="email_cta" value="{{ settings.email_cta }}"
+                   placeholder="Audit ready to send - useful?">
+        </div>
+    </div>
+
     <div class="btn-group">
         <button type="submit" class="btn primary">Save</button>
         <a href="{{ url_for('settings_page') }}" class="btn ghost">Cancel</a>

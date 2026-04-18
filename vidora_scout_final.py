@@ -1704,6 +1704,24 @@ Respond ONLY in this JSON (no markdown):
         print(f"  Pitch enrichment failed (keeping original): {e}")
 
 
+def _get_voice_guidance() -> str:
+    """Read optional user voice guidance from the dashboard settings DB.
+
+    Returns "" if unset or the DB is missing. Never raises — email generation
+    must still work if the dashboard isn't installed.
+    """
+    try:
+        import sqlite3
+        conn = sqlite3.connect("C:/vidora/vidora.db")
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = 'email_voice_guidance'"
+        ).fetchone()
+        conn.close()
+        return (row[0] or "").strip() if row else ""
+    except Exception:
+        return ""
+
+
 def _generate_email(result: dict, claude) -> None:
     """Text-only Claude call to write a personalised cold email (subject + body).
 
@@ -1745,9 +1763,15 @@ Competitor reviews: {bench.get('top_competitor_maps_reviews') or 'unknown'}
 Competitor website score: {comp1_ws or 'unknown'}
 Our rank: {bench.get('target_rank') or 'unknown'} out of {total} in this area"""
 
-    system_prompt = """You write cold emails for a premium outreach business.
-Your emails get replies because they feel like they were written by a person who actually looked — not a tool that ran a report.
+    voice = _get_voice_guidance()
+    voice_section = (
+        f"\n\nVOICE GUIDANCE (from the user — honour this when writing):\n{voice}\n"
+        if voice else ""
+    )
 
+    system_prompt = f"""You write cold emails for a premium outreach business.
+Your emails get replies because they feel like they were written by a person who actually looked — not a tool that ran a report.
+{voice_section}
 Study these high performing patterns before writing:
 
 PATTERN 1 — THE SPECIFIC OBSERVATION:

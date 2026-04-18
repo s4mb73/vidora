@@ -377,9 +377,9 @@ def create_app() -> Flask:
                 if account_missing else ("ready", "All credentials and sender details set.")
             ),
             "emails": (
-                ("ready", "Day 1 email copy configured.")
-                if (has("email_intro") or has("social_proof"))
-                else ("empty", "Using built-in defaults.")
+                ("ready", "Voice guidance set — Claude will honour it.")
+                if has("email_voice_guidance")
+                else ("empty", "Claude uses its built-in voice. Add guidance to shape tone.")
             ),
             "followups": (
                 ("ready", "Custom follow-up copy set.")
@@ -440,11 +440,7 @@ def create_app() -> Flask:
     @app.route("/settings/emails", methods=["GET", "POST"])
     def settings_emails():
         if request.method == "POST":
-            _save_fields(
-                ("email_subject_template", "email_greeting", "email_intro",
-                 "social_proof", "email_cta"),
-                dest="emails",
-            )
+            _save_fields(("email_voice_guidance",), dest="emails")
             return redirect(url_for("settings_emails"))
         return render_template(
             "settings_emails.html",
@@ -485,7 +481,12 @@ def create_app() -> Flask:
     @app.route("/settings/advanced", methods=["GET", "POST"])
     def settings_advanced():
         if request.method == "POST":
-            _save_fields(("who_we_are", "instagram_username"), dest="advanced")
+            _save_fields(
+                ("who_we_are", "instagram_username",
+                 "email_subject_template", "email_greeting", "email_intro",
+                 "social_proof", "email_cta"),
+                dest="advanced",
+            )
             return redirect(url_for("settings_advanced"))
         return render_template(
             "settings_advanced.html",
