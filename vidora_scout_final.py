@@ -1730,6 +1730,76 @@ def _get_business_context() -> str:
     return _get_kb_setting("business_context")
 
 
+def _get_approved_patterns(per_type: int = 3, total_cap: int = 15) -> dict[str, list[str]]:
+    """Return approved patterns grouped by type, freshest first.
+
+    Caps per-type at `per_type` and overall at `total_cap` so the system prompt
+    doesn't balloon. Never raises — returns {} on any error so email generation
+    continues regardless.
+    """
+    try:
+        import sqlite3
+        conn = sqlite3.connect("C:/vidora/vidora.db")
+        rows = conn.execute(
+            "SELECT pattern_type, text FROM patterns "
+            "WHERE status = 'approved' "
+            "ORDER BY approved_at DESC, id DESC"
+        ).fetchall()
+        conn.close()
+    except Exception:
+        return {}
+
+    grouped: dict[str, list[str]] = {}
+    total = 0
+    for ptype, text in rows:
+        if total >= total_cap:
+            break
+        bucket = grouped.setdefault(ptype, [])
+        if len(bucket) >= per_type:
+            continue
+        t = (text or "").strip()
+        if t:
+            bucket.append(t)
+            total += 1
+    return grouped
+
+
+def _render_patterns_block(grouped: dict[str, list[str]]) -> str:
+    """Build a readable prompt section from approved patterns, or '' if none."""
+    if not grouped:
+        return ""
+    # Friendly labels for the prompt
+    labels = {
+        "opening":         "OPENINGS",
+        "proof":           "PROOF LINES",
+        "competitor_drop": "COMPETITOR DROPS",
+        "close":           "CLOSES",
+        "subject":         "SUBJECT STRUCTURES",
+        "angle":           "ANGLES",
+        "other":           "OTHER",
+    }
+    # Preserve a sensible display order
+    order = ["opening", "proof", "competitor_drop", "angle", "subject", "close", "other"]
+    parts = []
+    for key in order:
+        if not grouped.get(key):
+            continue
+        parts.append(labels[key] + ":")
+        for line in grouped[key]:
+            parts.append(f'- "{line}"')
+        parts.append("")  # blank line between sections
+    if not parts:
+        return ""
+    body = "\n".join(parts).rstrip()
+    return (
+        "\n\nPROVEN PATTERNS (from past emails that got interested replies "
+        "— use their structure, do NOT copy them verbatim; match the rhythm "
+        "and specificity, write fresh copy for each lead):\n"
+        + body
+        + "\n"
+    )
+
+
 def _generate_email(result: dict, claude) -> None:
     """Text-only Claude call to write a personalised cold email (subject + body).
 
@@ -1773,6 +1843,7 @@ Our rank: {bench.get('target_rank') or 'unknown'} out of {total} in this area"""
 
     voice = _get_voice_guidance()
     business = _get_business_context()
+    approved = _get_approved_patterns()
     business_section = (
         f"\n\nABOUT THE BUSINESS YOU'RE WRITING FOR (use these facts, never contradict them):\n{business}\n"
         if business else ""
@@ -1781,10 +1852,11 @@ Our rank: {bench.get('target_rank') or 'unknown'} out of {total} in this area"""
         f"\n\nVOICE GUIDANCE (honour this when writing):\n{voice}\n"
         if voice else ""
     )
+    patterns_section = _render_patterns_block(approved)
 
     system_prompt = f"""You write cold emails for a premium outreach business.
 Your emails get replies because they feel like they were written by a person who actually looked — not a tool that ran a report.
-{business_section}{voice_section}
+{business_section}{voice_section}{patterns_section}
 Study these high performing patterns before writing:
 
 PATTERN 1 — THE SPECIFIC OBSERVATION:

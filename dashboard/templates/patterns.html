@@ -35,13 +35,54 @@
         email and extracts 1-4 reusable components — the opening move, a proof
         line, a competitor drop, a closing style. They land here as <strong>Pending</strong>.
         Approve the ones that genuinely represent what worked, and archive the
-        rest. Approved patterns become the source material for future email
-        generation.
+        rest. Approved patterns get injected into the email-generation prompt,
+        so the next batch of emails is shaped by what's already worked.
         <br><br>
-        Nothing here yet? That's expected during warmup — patterns only appear
-        after real interested replies land.
+        <strong>Seed from an existing library?</strong>
+        Open the form below to add patterns manually — useful before warmup
+        ends, or any time you want to hand-pick a pattern from an existing
+        template collection.
     </div>
 </div>
+
+<details class="panel" style="margin-bottom:20px;">
+    <summary style="cursor:pointer; font-size:14px; font-weight:600; color:var(--text);">
+        &#43; Add a pattern manually
+    </summary>
+    <form method="post" action="{{ url_for('pattern_new') }}" style="margin-top:14px;">
+        <div class="form-group">
+            <label>Pattern type</label>
+            <select name="pattern_type">
+                <option value="opening">Opening — first 1-2 lines that set the tone</option>
+                <option value="proof">Proof — credibility / social-proof line</option>
+                <option value="competitor_drop">Competitor drop — naming a rival as tension</option>
+                <option value="close">Close — final ask / CTA style</option>
+                <option value="subject">Subject — subject-line structure</option>
+                <option value="angle">Angle — overall framing</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>The text (quote it — max ~200 chars)</label>
+            <textarea name="text" rows="3"
+                      placeholder='e.g. "With 312 Google reviews but posting 0.5 times a week, you are invisible to new patients."'></textarea>
+        </div>
+        <div class="form-group">
+            <label>Why this works (optional — helps future you remember)</label>
+            <input type="text" name="reasoning"
+                   placeholder="Specific proof contrasted with specific gap. Low friction.">
+        </div>
+        <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
+                <input type="checkbox" name="auto_approve" value="1" checked>
+                Approve immediately (use in next batch of emails)
+            </label>
+        </div>
+        <div class="btn-group">
+            <button type="submit" class="btn primary">Add pattern</button>
+        </div>
+    </form>
+</details>
 
 {% if patterns %}
 

@@ -249,7 +249,7 @@
                 <div class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px;">Send history</div>
                 <table class="data" style="font-size:11px;">
                     <thead>
-                        <tr><th>Day</th><th>Sent</th><th>To</th><th>Status</th></tr>
+                        <tr><th>Day</th><th>Sent</th><th>To</th><th>Status</th><th>Prompt</th></tr>
                     </thead>
                     <tbody>
                     {% for log in outreach_log %}
@@ -266,10 +266,66 @@
                                 <span class="muted">{{ log.status }}</span>
                             {% endif %}
                         </td>
+                        <td class="muted" style="font-family:monospace; font-size:10px;">{{ (log.prompt_hash or '')[:8] or '-' }}</td>
                     </tr>
                     {% endfor %}
                     </tbody>
                 </table>
+            </div>
+            {% endif %}
+
+            {# Replies received #}
+            {% if lead_replies %}
+            <div class="divider"></div>
+            <div style="margin-top:14px;">
+                <div class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px;">Replies received</div>
+                {% for r in lead_replies %}
+                {% set colour = {
+                    'interested':'#FFD700', 'not_interested':'#8899A6',
+                    'unsubscribe':'#ED4245', 'auto_reply':'#5865F2',
+                    'other':'#A0A0A0'
+                }.get(r.label, '#A0A0A0') %}
+                <div style="border:1px solid var(--border); border-left:3px solid {{ colour }};
+                            border-radius:4px; padding:10px 12px; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="color:{{ colour }}; font-weight:600; font-size:11px; text-transform:uppercase;">
+                            {{ r.label|replace('_',' ') }}
+                        </span>
+                        <span class="muted" style="font-size:11px;">
+                            {{ (r.received_at or '')[:16] }}
+                            {% if r.confidence %} · {{ '%.0f'|format(r.confidence * 100) }}% confidence{% endif %}
+                            {% if r.label == 'auto_reply' and r.return_date %} · back {{ r.return_date }}{% endif %}
+                        </span>
+                    </div>
+                    <div class="muted" style="font-size:11px; margin-bottom:6px;">{{ r.subject or '(no subject)' }}</div>
+                    <div style="font-size:12px; line-height:1.5; white-space:pre-wrap;">{{ (r.body or '')[:500] }}{% if (r.body or '')|length > 500 %}…{% endif %}</div>
+                    {% if r.reasoning %}
+                    <div class="muted" style="font-size:10px; margin-top:6px; font-style:italic;">Classifier: {{ r.reasoning }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {# Patterns extracted from this lead #}
+            {% if lead_patterns %}
+            <div class="divider"></div>
+            <div style="margin-top:14px;">
+                <div class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px;">
+                    Patterns extracted from this lead
+                    <a href="{{ url_for('patterns_page') }}" style="margin-left:8px; font-size:10px;">view all patterns &rarr;</a>
+                </div>
+                {% for p in lead_patterns %}
+                <div style="border:1px solid var(--border); border-radius:4px; padding:8px 12px; margin-bottom:6px; font-size:12px;">
+                    <span class="muted" style="font-size:10px; text-transform:uppercase; letter-spacing:0.06em; margin-right:8px;">
+                        {{ p.pattern_type|replace('_',' ') }}
+                    </span>
+                    <span style="font-style:italic;">"{{ p.text[:160] }}{% if p.text|length > 160 %}…{% endif %}"</span>
+                    {% if p.status == 'approved' %}<span class="badge" style="margin-left:6px; color:var(--green); border-color:var(--green);">approved</span>
+                    {% elif p.status == 'archived' %}<span class="muted" style="margin-left:6px; font-size:10px;">archived</span>
+                    {% else %}<span class="muted" style="margin-left:6px; font-size:10px;">pending</span>{% endif %}
+                </div>
+                {% endfor %}
             </div>
             {% endif %}
         </div>

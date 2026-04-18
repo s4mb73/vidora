@@ -144,6 +144,16 @@ def create_app() -> Flask:
         preview_body = outreach.build_body(lead, settings)
         d3_subj, d3_body = outreach.build_followup_day3(lead, settings)
         d7_subj, d7_body = outreach.build_followup_day7(lead, settings)
+        # Replies + patterns specific to this lead
+        with db.connection() as conn:
+            lead_replies = [dict(r) for r in conn.execute(
+                "SELECT * FROM replies WHERE lead_id = ? ORDER BY received_at DESC",
+                (lead_id,),
+            ).fetchall()]
+            lead_patterns = [dict(r) for r in conn.execute(
+                "SELECT * FROM patterns WHERE source_lead_id = ? ORDER BY created_at DESC",
+                (lead_id,),
+            ).fetchall()]
         return render_template(
             "lead_detail.html",
             lead=lead,
@@ -156,6 +166,8 @@ def create_app() -> Flask:
             d3_body=d3_body,
             d7_subject=d7_subj,
             d7_body=d7_body,
+            lead_replies=lead_replies,
+            lead_patterns=lead_patterns,
             active_page="leads",
         )
 
@@ -377,6 +389,33 @@ def create_app() -> Flask:
             active_status=status,
             active_page="patterns",
         )
+
+    @app.route("/patterns/new", methods=["POST"])
+    def pattern_new():
+        """Manually add a pattern — for seeding from an existing template library."""
+        ptype = (request.form.get("pattern_type") or "other").strip().lower()
+        text = (request.form.get("text") or "").strip()
+        reasoning = (request.form.get("reasoning") or "").strip()
+        auto_approve = request.form.get("auto_approve") == "1"
+        valid = {"opening", "proof", "competitor_drop", "close", "subject", "angle", "other"}
+        if ptype not in valid:
+            ptype = "other"
+        if not text:
+            flash("Pattern text is required.", "error")
+            return redirect(url_for("patterns_page"))
+        pid = db.insert_pattern(
+            pattern_type=ptype, text=text, reasoning=reasoning or "Manually added.",
+            source_lead_id=None, source_reply_id=None,
+            source_email_subject="", source_email_body="",
+            extractor_model="manual",
+        )
+        if auto_approve:
+            db.set_pattern_status(pid, "approved")
+            flash("Pattern added and approved — in rotation for future emails.", "success")
+        else:
+            flash("Pattern added to Pending for review.", "success")
+        target_status = "approved" if auto_approve else "pending"
+        return redirect(url_for("patterns_page", status=target_status))
 
     @app.route("/patterns/<int:pattern_id>/<action>", methods=["POST"])
     def pattern_action(pattern_id: int, action: str):
