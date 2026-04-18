@@ -81,6 +81,80 @@ def _get_text_body(msg: email.message.Message) -> str:
     return ""
 
 
+# ── Bounce / DSN handling (RFC 3464) ──────────────────────────────
+
+import re as _re
+
+_BOUNCE_SENDERS = ("mailer-daemon", "postmaster", "no-reply", "bounce")
+_FINAL_RECIPIENT_RE = _re.compile(
+    r"^Final-Recipient:\s*(?:rfc822|x-unix|utf-8);\s*([^\s>]+)",
+    _re.IGNORECASE | _re.MULTILINE,
+)
+_FALLBACK_RECIPIENT_RE = _re.compile(
+    r"(?:failed\s*(?:recipient)?|could not be delivered to|address not found)[:\s]+([^\s<>]+@[^\s<>]+)",
+    _re.IGNORECASE,
+)
+
+
+def _looks_like_bounce(msg: email.message.Message, from_email: str) -> bool:
+    """Heuristic check for a DSN / bounce message."""
+    from_lower = (from_email or "").lower()
+    if any(token in from_lower for token in _BOUNCE_SENDERS):
+        return True
+    ct = str(msg.get("Content-Type") or "").lower()
+    if "multipart/report" in ct and "delivery-status" in ct:
+        return True
+    subject = (str(msg.get("Subject") or "")).lower()
+    if "undeliverable" in subject or "delivery status notification" in subject:
+        return True
+    return False
+
+
+def _extract_bounce_recipient(msg: email.message.Message) -> str | None:
+    """Pull the failed recipient out of a DSN. Returns lowercase email or None."""
+    # Preferred path: message/delivery-status subpart with Final-Recipient header
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == "message/delivery-status":
+                raw = part.get_payload(decode=True) or b""
+                try:
+                    txt = raw.decode("utf-8", errors="replace")
+                except Exception:
+                    txt = ""
+                m = _FINAL_RECIPIENT_RE.search(txt)
+                if m:
+                    addr = m.group(1).strip().strip("<>").lower()
+                    if "@" in addr:
+                        return addr
+
+    # Fallback: scan the full body for a recognisable pattern
+    body = _get_text_body(msg) or ""
+    m = _FALLBACK_RECIPIENT_RE.search(body)
+    if m:
+        return m.group(1).strip().strip("<>.,;").lower()
+    return None
+
+
+def _dispatch_bounce(lead_id: int, failed_email: str, subject: str, body: str) -> None:
+    """Handle a DSN for a known lead: mark dead, suppress, cancel follow-ups, log."""
+    db.cancel_pending_followups(lead_id)
+    db.update_lead_fields(lead_id, {"status": "dead", "last_reply_label": "bounce"})
+    db.add_suppression(failed_email, reason="bounce", lead_id=lead_id)
+    # Store in replies for dedup + visibility on the lead detail page.
+    db.insert_reply(
+        lead_id=lead_id,
+        from_email=f"mailer-daemon (bounce → {failed_email})",
+        subject=subject,
+        body=(body or "")[:reply_classifier.MAX_BODY_CHARS],
+        label="bounce",
+        confidence=1.0,
+        return_date=None,
+        classification_model="dsn-parser",
+        reasoning="Mailer-daemon non-delivery receipt — address marked dead and suppressed.",
+    )
+    print(f"[imap] lead #{lead_id}: BOUNCE — {failed_email} marked dead + suppressed")
+
+
 def _dispatch(lead: dict, reply: dict, reply_id: int) -> None:
     """Apply the right follow-up action for a classified reply.
 
@@ -181,12 +255,25 @@ def check_inbox_for_replies() -> int:
                 if "<" in from_header and ">" in from_header:
                     from_email = from_header.split("<")[1].split(">")[0].strip()
                 from_email = from_email.lower().strip()
+                subject = _decode_header(msg.get("Subject", ""))
+
+                # Bounce path — DSN arrives from mailer-daemon, not from the lead.
+                # Parse Final-Recipient header; match that address against our leads.
+                if _looks_like_bounce(msg, from_email):
+                    failed = _extract_bounce_recipient(msg)
+                    if failed and failed in lead_by_email:
+                        lead_id = lead_by_email[failed]
+                        if db.reply_exists_for_message(lead_id, subject, from_email):
+                            continue
+                        body = _get_text_body(msg) or ""
+                        _dispatch_bounce(lead_id, failed, subject, body)
+                        found += 1
+                    continue  # bounces never fall through to the reply path
 
                 if from_email not in lead_by_email:
                     continue
 
                 lead_id = lead_by_email[from_email]
-                subject = _decode_header(msg.get("Subject", ""))
 
                 # Dedup: skip if we've already stored this message.
                 if db.reply_exists_for_message(lead_id, subject, from_email):

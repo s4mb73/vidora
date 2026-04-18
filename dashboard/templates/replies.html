@@ -9,9 +9,10 @@
     ('not_interested', 'Not interested', 'var(--text-mute)'),
     ('unsubscribe',    'Unsubscribed',   'var(--red, #ED4245)'),
     ('auto_reply',     'Auto-reply',     'var(--blue, #5865F2)'),
+    ('bounce',         'Bounced',        '#8B0000'),
     ('other',          'Needs review',   'var(--text)')
 ] %}
-<div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px;">
+<div style="display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:20px;">
     {% for key, label, colour in label_defs %}
     <a href="{{ url_for('replies_page', label=key) }}"
        class="panel"
