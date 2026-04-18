@@ -4,7 +4,7 @@
 
 {# ── Pipeline stats bar ───────────────────────────────────────────── #}
 {% set ps = pipeline_stats or {} %}
-<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px;">
+<div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px;">
     <div class="panel" style="padding:14px 18px; text-align:center;">
         <div style="font-size:22px; font-weight:700; color:var(--blue);">{{ ps.leads_today or 0 }}</div>
         <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">Leads today</div>
@@ -14,8 +14,14 @@
         <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">Emails sent today</div>
     </div>
     <div class="panel" style="padding:14px 18px; text-align:center;">
-        <div style="font-size:22px; font-weight:700; color:{% if (ps.reply_rate or 0) >= 5 %}var(--green){% else %}var(--gold){% endif %};">{{ ps.reply_rate or 0 }}%</div>
-        <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">Reply rate this week</div>
+        <div style="font-size:22px; font-weight:700; color:{% if (ps.interested_rate or 0) >= 5 %}var(--green){% else %}var(--gold){% endif %};">{{ ps.interested_rate or 0 }}%</div>
+        <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">Interested rate this week</div>
+    </div>
+    <div class="panel" style="padding:14px 18px; text-align:center;">
+        <div style="font-size:22px; font-weight:700; color:{% if (ps.fail_rate_today or 0) >= 5 %}#ED4245{% else %}var(--text){% endif %};">{{ ps.fail_rate_today or 0 }}%</div>
+        <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">
+            Bounce/fail today{% if ps.failed_today %} · <span style="color:#ED4245;">{{ ps.failed_today }}</span>{% endif %}
+        </div>
     </div>
     <div class="panel" style="padding:14px 18px; text-align:center;">
         <div style="font-size:22px; font-weight:700;">

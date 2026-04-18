@@ -67,12 +67,20 @@ def create_app() -> Flask:
         recent = db.list_leads(order_by="analysed_at DESC", limit=8)
         top = db.list_leads(order_by="overall_score DESC", limit=5)
         runs = db.list_runs(limit=5)
+        reply_breakdown = db.reply_label_breakdown()
+        funnel = db.conversion_funnel()
+        grade_table = db.grade_conversion()
+        seq_rates = db.sequence_day_reply_rates()
         return render_template(
             "home.html",
             stats=stats,
             recent=recent,
             top=top,
             runs=runs,
+            reply_breakdown=reply_breakdown,
+            funnel=funnel,
+            grade_table=grade_table,
+            seq_rates=seq_rates,
             active_page="home",
         )
 

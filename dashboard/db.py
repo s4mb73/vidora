@@ -555,24 +555,32 @@ def leads_pipeline_stats() -> dict:
             "SELECT COUNT(*) AS n FROM outreach_log "
             "WHERE status='sent' AND DATE(sent_at)=DATE('now')"
         ).fetchone()["n"]
-        replied_week = conn.execute(
+        failed_today = conn.execute(
             "SELECT COUNT(*) AS n FROM outreach_log "
-            "WHERE status='replied' AND sent_at >= datetime('now','-7 days')"
+            "WHERE status='failed' AND DATE(sent_at)=DATE('now')"
         ).fetchone()["n"]
         sent_week = conn.execute(
             "SELECT COUNT(*) AS n FROM outreach_log "
             "WHERE status='sent' AND sent_at >= datetime('now','-7 days')"
+        ).fetchone()["n"]
+        interested_week = conn.execute(
+            "SELECT COUNT(*) AS n FROM replies "
+            "WHERE label='interested' AND received_at >= datetime('now','-7 days')"
         ).fetchone()["n"]
         best = conn.execute(
             "SELECT lead_grade FROM leads WHERE status='new' "
             "ORDER BY CASE lead_grade WHEN 'A' THEN 1 WHEN 'B' THEN 2 "
             "WHEN 'C' THEN 3 ELSE 4 END LIMIT 1"
         ).fetchone()
-    reply_rate = round(replied_week / sent_week * 100) if sent_week else 0
+    interested_rate = round(interested_week / sent_week * 100) if sent_week else 0
+    attempts_today = emails_today + failed_today
+    fail_rate_today = round(failed_today / attempts_today * 100) if attempts_today else 0
     return {
         "leads_today": today,
         "emails_today": emails_today,
-        "reply_rate": reply_rate,
+        "interested_rate": interested_rate,
+        "fail_rate_today": fail_rate_today,
+        "failed_today": failed_today,
         "best_grade": best["lead_grade"] if best else "-",
     }
 
@@ -898,3 +906,183 @@ def list_suppressed(limit: int = 500) -> list[dict]:
             (limit,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Analytics — reply breakdown, funnel, per-grade, per-sequence-day
+# ---------------------------------------------------------------------------
+
+_LABELS = ("interested", "not_interested", "unsubscribe", "auto_reply", "other")
+
+
+def reply_label_breakdown() -> dict:
+    """Return label counts for this week and all time.
+
+    Shape:
+        {
+          "week":     {"interested": 3, "not_interested": 4, ..., "total": 12},
+          "all_time": {"interested": 12, ..., "total": 44},
+          "interested_rate_week": 25.0,   # % of week's replies that were interested
+        }
+    """
+    out: dict = {"week": {}, "all_time": {}}
+    with connection() as conn:
+        week_rows = conn.execute(
+            "SELECT label, COUNT(*) AS n FROM replies "
+            "WHERE received_at >= datetime('now', '-7 days') GROUP BY label"
+        ).fetchall()
+        all_rows = conn.execute(
+            "SELECT label, COUNT(*) AS n FROM replies GROUP BY label"
+        ).fetchall()
+    week_map = {r["label"]: r["n"] for r in week_rows}
+    all_map = {r["label"]: r["n"] for r in all_rows}
+    for lbl in _LABELS:
+        out["week"][lbl] = week_map.get(lbl, 0)
+        out["all_time"][lbl] = all_map.get(lbl, 0)
+    out["week"]["total"] = sum(out["week"][l] for l in _LABELS)
+    out["all_time"]["total"] = sum(out["all_time"][l] for l in _LABELS)
+    out["interested_rate_week"] = (
+        round(out["week"]["interested"] / out["week"]["total"] * 100, 1)
+        if out["week"]["total"] else 0.0
+    )
+    out["interested_rate_all"] = (
+        round(out["all_time"]["interested"] / out["all_time"]["total"] * 100, 1)
+        if out["all_time"]["total"] else 0.0
+    )
+    return out
+
+
+def conversion_funnel() -> dict:
+    """Top-of-funnel → interested funnel, all time.
+
+    Counts unique leads at each stage (not email sends), so repeated follow-ups
+    to the same lead don't inflate numbers.
+    """
+    with connection() as conn:
+        analysed = conn.execute("SELECT COUNT(*) AS n FROM leads").fetchone()["n"]
+        contacted = conn.execute(
+            "SELECT COUNT(DISTINCT lead_id) AS n FROM outreach_log "
+            "WHERE status = 'sent' AND sequence_day = 1"
+        ).fetchone()["n"]
+        any_reply = conn.execute(
+            "SELECT COUNT(DISTINCT lead_id) AS n FROM replies"
+        ).fetchone()["n"]
+        interested = conn.execute(
+            "SELECT COUNT(DISTINCT lead_id) AS n FROM replies WHERE label = 'interested'"
+        ).fetchone()["n"]
+
+    def pct(a: int, b: int) -> float:
+        return round(a / b * 100, 1) if b else 0.0
+
+    return {
+        "analysed": analysed,
+        "contacted": contacted,
+        "any_reply": any_reply,
+        "interested": interested,
+        "contacted_rate": pct(contacted, analysed),
+        "reply_rate": pct(any_reply, contacted),
+        "interested_of_replies": pct(interested, any_reply),
+        "interested_of_contacted": pct(interested, contacted),
+    }
+
+
+def grade_conversion() -> list[dict]:
+    """Interested-rate per lead grade.
+
+    Returns one row per grade (A, B, C, D) with contacted / interested / rate %.
+    Only counts leads that actually received a Day 1 email.
+    """
+    rows: list[dict] = []
+    with connection() as conn:
+        for grade in ("A", "B", "C", "D"):
+            contacted = conn.execute(
+                "SELECT COUNT(DISTINCT o.lead_id) AS n FROM outreach_log o "
+                "JOIN leads l ON l.id = o.lead_id "
+                "WHERE o.status = 'sent' AND o.sequence_day = 1 AND l.lead_grade = ?",
+                (grade,),
+            ).fetchone()["n"]
+            interested = conn.execute(
+                "SELECT COUNT(DISTINCT r.lead_id) AS n FROM replies r "
+                "JOIN leads l ON l.id = r.lead_id "
+                "WHERE r.label = 'interested' AND l.lead_grade = ?",
+                (grade,),
+            ).fetchone()["n"]
+            rate = round(interested / contacted * 100, 1) if contacted else 0.0
+            rows.append({
+                "grade": grade,
+                "contacted": contacted,
+                "interested": interested,
+                "rate": rate,
+            })
+    return rows
+
+
+def sequence_day_reply_rates() -> list[dict]:
+    """For each sequence day (1, 3, 7): sent count, reply count, reply rate %.
+
+    A 'reply' here is any reply received after that sequence day's email
+    was sent but before a later day's email was sent. This attributes replies
+    to the most recent email that could have triggered them.
+    """
+    rows: list[dict] = []
+    with connection() as conn:
+        for day in (1, 3, 7):
+            sent = conn.execute(
+                "SELECT COUNT(*) AS n FROM outreach_log "
+                "WHERE status = 'sent' AND sequence_day = ?",
+                (day,),
+            ).fetchone()["n"]
+            # A reply is attributed to `day` if it arrived after that send
+            # and before the next sequence day's send (if any) for the same lead.
+            reply_rows = conn.execute(
+                "SELECT o.lead_id, o.sent_at AS day_sent, "
+                "  (SELECT MIN(o2.sent_at) FROM outreach_log o2 "
+                "     WHERE o2.lead_id = o.lead_id AND o2.status = 'sent' "
+                "       AND o2.sequence_day > o.sequence_day) AS next_sent "
+                "FROM outreach_log o "
+                "WHERE o.status = 'sent' AND o.sequence_day = ?",
+                (day,),
+            ).fetchall()
+            reply_count = 0
+            for r in reply_rows:
+                day_sent = r["day_sent"]
+                next_sent = r["next_sent"]
+                if next_sent:
+                    hit = conn.execute(
+                        "SELECT 1 FROM replies WHERE lead_id = ? "
+                        "AND received_at > ? AND received_at <= ? LIMIT 1",
+                        (r["lead_id"], day_sent, next_sent),
+                    ).fetchone()
+                else:
+                    hit = conn.execute(
+                        "SELECT 1 FROM replies WHERE lead_id = ? "
+                        "AND received_at > ? LIMIT 1",
+                        (r["lead_id"], day_sent),
+                    ).fetchone()
+                if hit:
+                    reply_count += 1
+            rate = round(reply_count / sent * 100, 1) if sent else 0.0
+            rows.append({
+                "day": day,
+                "sent": sent,
+                "replies": reply_count,
+                "rate": rate,
+            })
+    return rows
+
+
+def send_fail_rate_today() -> dict:
+    """Bounce / fail rate for today's send attempts."""
+    today = "CURRENT_DATE"  # SQLite literal
+    with connection() as conn:
+        sent = conn.execute(
+            "SELECT COUNT(*) AS n FROM outreach_log "
+            "WHERE status = 'sent' AND DATE(sent_at) = DATE('now')"
+        ).fetchone()["n"]
+        failed = conn.execute(
+            "SELECT COUNT(*) AS n FROM outreach_log "
+            "WHERE status = 'failed' AND DATE(sent_at) = DATE('now')"
+        ).fetchone()["n"]
+    attempts = sent + failed
+    rate = round(failed / attempts * 100, 1) if attempts else 0.0
+    return {"sent": sent, "failed": failed, "attempts": attempts, "fail_rate": rate}
