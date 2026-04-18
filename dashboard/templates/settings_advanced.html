@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Advanced settings - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <a href="{{ url_for('settings_page') }}" class="muted" style="font-size:12px;">&larr; Settings</a>
+        <h1 style="margin-top:4px;">Advanced</h1>
+        <div class="subtitle">Things most users never need to touch.</div>
+    </div>
+</div>
+
+<form method="post">
+    <div class="panel">
+        <h2>PDF audit — "Who we are" section</h2>
+        <div class="form-hint" style="margin-bottom:12px;">
+            This paragraph appears at the end of every PDF audit report.
+        </div>
+        <div class="form-group">
+            <textarea name="who_we_are" rows="6">{{ settings.who_we_are }}</textarea>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Instagram display handle</h2>
+        <div class="form-group">
+            <label>Handle (display only)</label>
+            <input type="text" name="instagram_username" value="{{ settings.instagram_username }}"
+                   placeholder="your_studio_handle">
+            <div class="form-hint">
+                Cosmetic — shown in the UI. The actual login credentials used by the scraper
+                live in <code>C:/vidora/ig_user.txt</code> and <code>ig_pass.txt</code>.
+            </div>
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button type="submit" class="btn primary">Save</button>
+        <a href="{{ url_for('settings_page') }}" class="btn ghost">Cancel</a>
+    </div>
+</form>
+
+<div class="panel">
+    <h2>Import existing leads</h2>
+    <p class="muted" style="font-size:13px;">
+        Upload a <code>leads.csv</code> produced by the scout script to load it into
+        the dashboard. PDF audits will be regenerated.
+    </p>
+    <form method="post" action="{{ url_for('settings_import') }}" enctype="multipart/form-data">
+        <div class="form-group">
+            <label>CSV file</label>
+            <input type="file" name="csv_file" accept=".csv" required>
+        </div>
+        <div class="btn-group">
+            <button type="submit" class="btn primary">Import CSV</button>
+        </div>
+    </form>
+</div>
+
+<div class="grid-2">
+    <div class="panel">
+        <h2>File paths on the VPS</h2>
+        <dl class="kv">
+            <dt>Scout script</dt><dd><code>vidora_scout_final.py</code></dd>
+            <dt>Multilogin pass</dt><dd><code>C:/vidora/pass.txt</code></dd>
+            <dt>Instagram user</dt><dd><code>C:/vidora/ig_user.txt</code></dd>
+            <dt>Instagram pass</dt><dd><code>C:/vidora/ig_pass.txt</code></dd>
+            <dt>Zoho email</dt><dd><code>C:/vidora/zoho_email.txt</code></dd>
+            <dt>Zoho password</dt><dd><code>C:/vidora/zoho_pass.txt</code></dd>
+            <dt>Discord webhook</dt><dd><code>C:/vidora/discord_webhook.txt</code></dd>
+            <dt>Screenshots</dt><dd><code>C:/vidora/screenshots/</code></dd>
+            <dt>SQLite database</dt><dd><code>C:/vidora/vidora.db</code></dd>
+            <dt>PDF audits</dt><dd><code>C:/vidora/audits/</code></dd>
+        </dl>
+    </div>
+
+    <div class="panel">
+        <h2>Email sending</h2>
+        <dl class="kv">
+            <dt>Daily cap</dt><dd>50 emails/day (hardcoded)</dd>
+            <dt>SMTP host</dt><dd><code>smtp.zoho.eu:465</code> (SSL)</dd>
+            <dt>IMAP host</dt><dd><code>imap.zoho.eu:993</code> (SSL)</dd>
+            <dt>Reply check</dt><dd>Every 15 minutes</dd>
+            <dt>Legal</dt><dd>Unsubscribe footer on every email</dd>
+        </dl>
+    </div>
+</div>
+
+<div class="panel">
+    <h2>About</h2>
+    <p class="muted" style="font-size:13px; margin:0;">
+        Vidora dashboard runs locally on port 8080. All lead data is stored in a
+        SQLite database on this machine only. No external analytics, no telemetry.
+    </p>
+</div>
+
+{% endblock %}

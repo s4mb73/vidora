@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Settings - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Settings</h1>
+        <div class="subtitle">Configure your outreach system. Pick a section below.</div>
+    </div>
+</div>
+
+{% set cards = [
+    ('account',    'Account',      'API key, email credentials, sender identity, Discord.',          url_for('settings_account')),
+    ('emails',     'Email copy',   'The first email sent to every lead — subject, intro, CTA.',     url_for('settings_emails')),
+    ('followups',  'Follow-ups',   'Day 3 and Day 7 follow-up templates.',                          url_for('settings_followups')),
+    ('pipeline',   'Pipeline',     'Default city, leads per run, branding.',                        url_for('settings_pipeline')),
+    ('advanced',   'Advanced',     'CSV import, file paths, PDF footer copy.',                      url_for('settings_advanced'))
+] %}
+
+<div class="stat-grid" style="grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));">
+{% for key, title, desc, link in cards %}
+    {% set st, msg = status[key] %}
+    <a href="{{ link }}" class="panel" style="padding:20px; text-decoration:none; display:block;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="font-size:15px; font-weight:600; color:var(--text);">{{ title }}</div>
+            {% if st == 'ready' %}
+                <span style="font-size:10px; font-weight:600; color:#57F287; background:#57F28722;
+                             border:1px solid #57F28755; padding:2px 8px; border-radius:3px;
+                             text-transform:uppercase; letter-spacing:.06em;">Ready</span>
+            {% elif st == 'warn' %}
+                <span style="font-size:10px; font-weight:600; color:#FFD700; background:#FFD70022;
+                             border:1px solid #FFD70055; padding:2px 8px; border-radius:3px;
+                             text-transform:uppercase; letter-spacing:.06em;">Needs attention</span>
+            {% else %}
+                <span style="font-size:10px; font-weight:600; color:var(--text-mute); background:transparent;
+                             border:1px solid var(--border); padding:2px 8px; border-radius:3px;
+                             text-transform:uppercase; letter-spacing:.06em;">Default</span>
+            {% endif %}
+        </div>
+        <div class="muted" style="font-size:12px; margin-bottom:10px; line-height:1.5;">{{ desc }}</div>
+        <div style="font-size:11px; color:{% if st == 'warn' %}#FFD700{% else %}var(--text-mute){% endif %};">
+            {{ msg }}
+        </div>
+    </a>
+{% endfor %}
+</div>
+
+<div class="muted" style="margin-top:28px; font-size:12px;">
+    Every change takes effect immediately. Restart the dashboard only if you edit
+    credential files outside the app.
+</div>
+
+{% endblock %}

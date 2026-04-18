@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Pipeline settings - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <a href="{{ url_for('settings_page') }}" class="muted" style="font-size:12px;">&larr; Settings</a>
+        <h1 style="margin-top:4px;">Pipeline</h1>
+        <div class="subtitle">How new leads are sourced and how your brand appears.</div>
+    </div>
+</div>
+
+<form method="post">
+    <div class="panel">
+        <h2>Run defaults</h2>
+        <div class="form-group">
+            <label>Default target city</label>
+            <input type="text" name="default_location" value="{{ settings.default_location }}"
+                   placeholder="manchester">
+            <div class="form-hint">Pre-filled on the Run page. Leads outside this city are deprioritised.</div>
+        </div>
+        <div class="form-group">
+            <label>Default leads per run</label>
+            <input type="number" name="default_leads_per_run" min="1" max="100"
+                   value="{{ settings.default_leads_per_run }}">
+            <div class="form-hint">Most runs take 2-5 minutes per lead.</div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Branding</h2>
+        <div class="form-hint" style="margin-bottom:12px;">
+            Shown in the dashboard sidebar and on PDF audit reports. Not sent in emails.
+        </div>
+        <div class="form-group">
+            <label>Company name</label>
+            <input type="text" name="company_name" value="{{ settings.company_name }}">
+        </div>
+        <div class="form-group">
+            <label>Tagline</label>
+            <input type="text" name="company_tagline" value="{{ settings.company_tagline }}">
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button type="submit" class="btn primary">Save</button>
+        <a href="{{ url_for('settings_page') }}" class="btn ghost">Cancel</a>
+    </div>
+</form>
+
+{% endblock %}

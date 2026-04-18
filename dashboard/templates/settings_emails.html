@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Email copy - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <a href="{{ url_for('settings_page') }}" class="muted" style="font-size:12px;">&larr; Settings</a>
+        <h1 style="margin-top:4px;">Email copy</h1>
+        <div class="subtitle">The first email sent to every lead.</div>
+    </div>
+</div>
+
+<form method="post">
+    <div class="panel">
+        <div class="form-hint" style="margin-bottom:14px;">
+            Leaving any field blank uses the built-in default. Most fields support placeholders
+            like <code>{business_name}</code> and <code>{first_name}</code> — these are
+            automatically filled per lead when the email is sent.
+        </div>
+
+        <div class="form-group">
+            <label>Subject line template</label>
+            <input type="text" name="email_subject_template"
+                   value="{{ settings.email_subject_template }}"
+                   placeholder="{business_name} — quick question">
+            <div class="form-hint">
+                Leave empty to use the automatic hook-based subject (e.g.
+                "{business_name} — {review_count} reviews, {avg_likes} likes").
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Greeting</label>
+            <input type="text" name="email_greeting" value="{{ settings.email_greeting }}"
+                   placeholder="Hi {first_name},">
+        </div>
+
+        <div class="form-group">
+            <label>Intro line</label>
+            <textarea name="email_intro" rows="2"
+                      placeholder="I run Innovite - a content evaluation platform used by media agencies across the UK.">{{ settings.email_intro }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Social proof</label>
+            <textarea name="social_proof" rows="3"
+                      placeholder="Vidora Media, who work with Premier League footballers, specialise in exactly this.">{{ settings.social_proof }}</textarea>
+            <div class="form-hint">The credibility line that appears after the weakness diagnosis.</div>
+        </div>
+
+        <div class="form-group">
+            <label>Call-to-action line</label>
+            <input type="text" name="email_cta" value="{{ settings.email_cta }}"
+                   placeholder="Audit ready to send - useful?">
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button type="submit" class="btn primary">Save</button>
+        <a href="{{ url_for('settings_page') }}" class="btn ghost">Cancel</a>
+    </div>
+</form>
+
+<div class="panel" style="background:var(--panel); border-left:3px solid var(--blue);">
+    <div class="muted" style="font-size:12px;">
+        <strong style="color:var(--text);">Tip:</strong>
+        To preview an actual rendered email with real lead data, open any lead
+        from the <a href="{{ url_for('leads') }}">Leads</a> page — the detail view
+        shows the subject and body as they will be sent.
+    </div>
+</div>
+
+{% endblock %}

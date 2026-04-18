@@ -356,60 +356,140 @@ def create_app() -> Flask:
         )
 
     # -----------------------------------------------------------------------
-    # Settings
+    # Settings — hub + 5 sub-pages
     # -----------------------------------------------------------------------
-    @app.route("/settings", methods=["GET", "POST"])
-    def settings_page():
-        if request.method == "POST":
-            updates = {}
-            plain_keys = (
-                "company_name",
-                "company_tagline",
-                "default_location",
-                "default_leads_per_run",
-                "instagram_username",
-                # Sender identity
-                "sender_name",
-                "sender_title",
-                "sender_email",
-                "sender_website",
-                "sender_address",
-                # Client company
-                "client_company",
-                # Email template
-                "email_subject_template",
-                "email_greeting",
-                "email_intro",
-                "social_proof",
-                "email_cta",
-                # Follow-up sequence
-                "followup_day3_subject",
-                "followup_day3_body",
-                "followup_day7_subject",
-                "followup_day7_body",
-                # PDF
-                "who_we_are",
-            )
-            for key in plain_keys:
-                if key in request.form:
-                    updates[key] = request.form[key]  # preserve newlines in textarea fields
-            api_key = (request.form.get("anthropic_api_key") or "").strip()
-            if api_key and not api_key.startswith("*"):
-                updates["anthropic_api_key"] = api_key
-            db.update_settings(updates)
-            flash("Settings saved.", "success")
-            return redirect(url_for("settings_page"))
 
+    def _settings_status(settings: dict) -> dict:
+        """Return a {section: (status, message)} map used by the hub page.
+
+        status is 'ready' | 'warn' | 'empty'. The hub shows a badge per card.
+        """
+        def has(key: str) -> bool:
+            return bool((settings.get(key) or "").strip())
+
+        account_missing = [k for k in ("anthropic_api_key", "sender_name",
+                                       "sender_email", "sender_address") if not has(k)]
+        pipeline_missing = [k for k in ("default_location",) if not has(k)]
+
+        return {
+            "account": (
+                ("warn", f"Missing: {', '.join(account_missing)}")
+                if account_missing else ("ready", "All credentials and sender details set.")
+            ),
+            "emails": (
+                ("ready", "Day 1 email copy configured.")
+                if (has("email_intro") or has("social_proof"))
+                else ("empty", "Using built-in defaults.")
+            ),
+            "followups": (
+                ("ready", "Custom follow-up copy set.")
+                if (has("followup_day3_body") or has("followup_day7_body"))
+                else ("empty", "Using built-in follow-up templates.")
+            ),
+            "pipeline": (
+                ("warn", f"Missing: {', '.join(pipeline_missing)}")
+                if pipeline_missing
+                else ("ready", f"Default city: {settings.get('default_location')}.")
+            ),
+            "advanced": ("ready", "File paths, CSV import, and system info."),
+        }
+
+    def _save_fields(fields: tuple, dest: str) -> None:
+        """Apply POSTed form fields (by name) to settings, then redirect."""
+        updates = {k: request.form[k] for k in fields if k in request.form}
+        api_key = (request.form.get("anthropic_api_key") or "").strip()
+        if api_key and not api_key.startswith("*"):
+            updates["anthropic_api_key"] = api_key
+        if updates:
+            db.update_settings(updates)
+            flash("Saved.", "success")
+
+    @app.route("/settings")
+    def settings_page():
+        settings = db.get_settings()
+        status = _settings_status(settings)
+        return render_template(
+            "settings_index.html",
+            settings=settings,
+            status=status,
+            active_page="settings",
+        )
+
+    @app.route("/settings/account", methods=["GET", "POST"])
+    def settings_account():
+        if request.method == "POST":
+            _save_fields(
+                ("sender_name", "sender_title", "sender_email", "sender_website",
+                 "sender_address", "client_company"),
+                dest="account",
+            )
+            return redirect(url_for("settings_account"))
         settings = db.get_settings()
         masked_key = _mask(settings.get("anthropic_api_key", ""))
         from pathlib import Path as _Path
         _wh = _Path("C:/vidora/discord_webhook.txt")
         discord_webhook = _wh.read_text(encoding="utf-8").strip() if _wh.exists() else ""
         return render_template(
-            "settings.html",
+            "settings_account.html",
             settings=settings,
             masked_key=masked_key,
             discord_webhook=discord_webhook,
+            active_page="settings",
+        )
+
+    @app.route("/settings/emails", methods=["GET", "POST"])
+    def settings_emails():
+        if request.method == "POST":
+            _save_fields(
+                ("email_subject_template", "email_greeting", "email_intro",
+                 "social_proof", "email_cta"),
+                dest="emails",
+            )
+            return redirect(url_for("settings_emails"))
+        return render_template(
+            "settings_emails.html",
+            settings=db.get_settings(),
+            active_page="settings",
+        )
+
+    @app.route("/settings/followups", methods=["GET", "POST"])
+    def settings_followups():
+        if request.method == "POST":
+            _save_fields(
+                ("followup_day3_subject", "followup_day3_body",
+                 "followup_day7_subject", "followup_day7_body"),
+                dest="followups",
+            )
+            return redirect(url_for("settings_followups"))
+        return render_template(
+            "settings_followups.html",
+            settings=db.get_settings(),
+            active_page="settings",
+        )
+
+    @app.route("/settings/pipeline", methods=["GET", "POST"])
+    def settings_pipeline():
+        if request.method == "POST":
+            _save_fields(
+                ("company_name", "company_tagline", "default_location",
+                 "default_leads_per_run"),
+                dest="pipeline",
+            )
+            return redirect(url_for("settings_pipeline"))
+        return render_template(
+            "settings_pipeline.html",
+            settings=db.get_settings(),
+            active_page="settings",
+        )
+
+    @app.route("/settings/advanced", methods=["GET", "POST"])
+    def settings_advanced():
+        if request.method == "POST":
+            _save_fields(("who_we_are", "instagram_username"), dest="advanced")
+            return redirect(url_for("settings_advanced"))
+        return render_template(
+            "settings_advanced.html",
+            settings=db.get_settings(),
             active_page="settings",
         )
 
@@ -418,7 +498,7 @@ def create_app() -> Flask:
         file = request.files.get("csv_file")
         if not file or not file.filename:
             flash("Pick a CSV file to import.", "error")
-            return redirect(url_for("settings_page"))
+            return redirect(url_for("settings_advanced"))
         tmp = DASHBOARD_DIR / "data" / "_import.csv"
         file.save(tmp)
         try:
@@ -431,7 +511,7 @@ def create_app() -> Flask:
                 tmp.unlink()
             except Exception:
                 pass
-        return redirect(url_for("settings_page"))
+        return redirect(url_for("settings_advanced"))
 
     # -----------------------------------------------------------------------
     # API endpoints (called by n8n workflows)

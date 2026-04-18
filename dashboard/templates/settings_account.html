@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Account settings - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <a href="{{ url_for('settings_page') }}" class="muted" style="font-size:12px;">&larr; Settings</a>
+        <h1 style="margin-top:4px;">Account</h1>
+        <div class="subtitle">API key, sender identity, and notification webhook.</div>
+    </div>
+</div>
+
+<form method="post">
+    <div class="panel">
+        <h2>Anthropic API</h2>
+        <div class="form-group">
+            <label>API key</label>
+            <input type="password" name="anthropic_api_key"
+                   placeholder="{{ masked_key or 'sk-ant-...' }}">
+            <div class="form-hint">
+                {% if masked_key %}Current: <code>{{ masked_key }}</code>. Leave empty to keep unchanged.
+                {% else %}Not set. Required for lead scoring and reply classification.{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Sender identity</h2>
+        <div class="form-hint" style="margin-bottom:12px;">
+            These appear in the email footer of every message you send.
+        </div>
+        <div class="form-group">
+            <label>Your name</label>
+            <input type="text" name="sender_name" value="{{ settings.sender_name }}"
+                   placeholder="e.g. Louis">
+        </div>
+        <div class="form-group">
+            <label>Title</label>
+            <input type="text" name="sender_title" value="{{ settings.sender_title }}"
+                   placeholder="e.g. Founder, Innovite">
+        </div>
+        <div class="form-group">
+            <label>From email</label>
+            <input type="email" name="sender_email" value="{{ settings.sender_email }}"
+                   placeholder="outreach@innovite.io">
+            <div class="form-hint">
+                Must match the Zoho account in <code>C:/vidora/zoho_email.txt</code>.
+                If they differ, sends will fail.
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Website</label>
+            <input type="text" name="sender_website" value="{{ settings.sender_website }}"
+                   placeholder="innovite.io">
+        </div>
+        <div class="form-group">
+            <label>Business address <span class="muted">(legal requirement in most jurisdictions)</span></label>
+            <input type="text" name="sender_address" value="{{ settings.sender_address }}"
+                   placeholder="123 Example Street, Manchester, M1 1AA">
+        </div>
+        <div class="form-group">
+            <label>Agency name mentioned in emails</label>
+            <input type="text" name="client_company" value="{{ settings.client_company }}"
+                   placeholder="Vidora Media">
+            <div class="form-hint">The production agency referenced in email social proof and PDF audits.</div>
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button type="submit" class="btn primary">Save</button>
+        <a href="{{ url_for('settings_page') }}" class="btn ghost">Cancel</a>
+    </div>
+</form>
+
+<div class="panel">
+    <h2>Discord notifications</h2>
+    <dl class="kv">
+        <dt>Status</dt>
+        <dd>{% if discord_webhook %}✅ Connected{% else %}❌ Not set{% endif %}</dd>
+        <dt>Alerts sent</dt>
+        <dd>Interested replies, pipeline run completions, send failures, weekly report</dd>
+    </dl>
+    {% if discord_webhook %}
+    <form method="post" action="{{ url_for('api_discord_test') }}" style="margin-top:12px;">
+        <button type="submit" class="btn">Send test message</button>
+    </form>
+    {% else %}
+    <div class="muted" style="font-size:12px; margin-top:8px;">
+        Paste your Discord webhook URL into <code>C:/vidora/discord_webhook.txt</code> on the VPS
+        to enable notifications.
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

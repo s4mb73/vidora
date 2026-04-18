@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Follow-ups - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <a href="{{ url_for('settings_page') }}" class="muted" style="font-size:12px;">&larr; Settings</a>
+        <h1 style="margin-top:4px;">Follow-up sequence</h1>
+        <div class="subtitle">
+            Two follow-ups sent automatically — Day 3 and Day 7 after the first email.
+            Cancelled if the lead replies.
+        </div>
+    </div>
+</div>
+
+<form method="post">
+    <div class="panel">
+        <div class="form-hint" style="margin-bottom:14px;">
+            Leave a body blank to use the built-in template. Placeholders like
+            <code>{business_name}</code>, <code>{competitor_name}</code>,
+            <code>{maps_review_count}</code>, and <code>{sender_name}</code> are
+            filled per lead when the email is sent.
+        </div>
+
+        <h3 style="color:var(--gold); margin-bottom:12px; font-size:14px; font-weight:600;
+                   text-transform:uppercase; letter-spacing:.08em;">
+            Day 3 — competitor reference
+        </h3>
+        <div class="form-group">
+            <label>Subject</label>
+            <input type="text" name="followup_day3_subject"
+                   value="{{ settings.followup_day3_subject }}"
+                   placeholder="{business_name} - what {competitor_name} are doing differently">
+        </div>
+        <div class="form-group">
+            <label>Body</label>
+            <textarea name="followup_day3_body" rows="10"
+                      placeholder="Leave blank to use the default Day 3 template.">{{ settings.followup_day3_body }}</textarea>
+        </div>
+
+        <h3 style="color:var(--gold); margin:24px 0 12px 0; font-size:14px; font-weight:600;
+                   text-transform:uppercase; letter-spacing:.08em;">
+            Day 7 — scarcity close
+        </h3>
+        <div class="form-group">
+            <label>Subject</label>
+            <input type="text" name="followup_day7_subject"
+                   value="{{ settings.followup_day7_subject }}"
+                   placeholder="two Manchester {business_type}s - one spot left">
+        </div>
+        <div class="form-group">
+            <label>Body</label>
+            <textarea name="followup_day7_body" rows="10"
+                      placeholder="Leave blank to use the default Day 7 template.">{{ settings.followup_day7_body }}</textarea>
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button type="submit" class="btn primary">Save</button>
+        <a href="{{ url_for('settings_page') }}" class="btn ghost">Cancel</a>
+    </div>
+</form>
+
+{% endblock %}
