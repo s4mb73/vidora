@@ -363,6 +363,37 @@ def create_app() -> Flask:
         )
 
     # -----------------------------------------------------------------------
+    # Patterns — winning components extracted from interested replies
+    # -----------------------------------------------------------------------
+    @app.route("/patterns")
+    def patterns_page():
+        status = request.args.get("status") or "pending"
+        items = db.list_patterns(status=status, limit=500)
+        counts = db.pattern_counts()
+        return render_template(
+            "patterns.html",
+            patterns=items,
+            counts=counts,
+            active_status=status,
+            active_page="patterns",
+        )
+
+    @app.route("/patterns/<int:pattern_id>/<action>", methods=["POST"])
+    def pattern_action(pattern_id: int, action: str):
+        target = {
+            "approve":  "approved",
+            "archive":  "archived",
+            "pending":  "pending",
+        }.get(action)
+        if target is None:
+            flash("Unknown action.", "error")
+        else:
+            db.set_pattern_status(pattern_id, target)
+            flash(f"Pattern {target}.", "success")
+        return_to = request.form.get("return_to") or url_for("patterns_page")
+        return redirect(return_to)
+
+    # -----------------------------------------------------------------------
     # Settings — hub + 5 sub-pages
     # -----------------------------------------------------------------------
 

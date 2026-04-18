@@ -32,6 +32,7 @@ from pathlib import Path
 
 from . import db
 from . import reply_classifier
+from . import pattern_extractor
 from .discord import notify_reply_interested, notify_reply_other
 
 IMAP_HOST = "imap.zoho.eu"
@@ -80,10 +81,12 @@ def _get_text_body(msg: email.message.Message) -> str:
     return ""
 
 
-def _dispatch(lead: dict, reply: dict) -> None:
+def _dispatch(lead: dict, reply: dict, reply_id: int) -> None:
     """Apply the right follow-up action for a classified reply.
 
-    `reply` is the dict returned by reply_classifier.classify().
+    `reply` is the dict returned by reply_classifier.classify() plus body/from_email.
+    `reply_id` is the replies.id of the row we just stored — used so pattern
+    extraction can reference the source reply.
     """
     lead_id = lead["id"]
     label = reply["label"]
@@ -114,6 +117,12 @@ def _dispatch(lead: dict, reply: dict) -> None:
     if label == "interested":
         notify_reply_interested(lead, reply["from_email"], reply["body"][:300])
         print(f"[imap] lead #{lead_id}: INTERESTED — Discord pinged")
+        # Extract winning patterns from the email that triggered this reply.
+        # Non-fatal — extraction failures must not block dispatch.
+        try:
+            pattern_extractor.extract_and_store(lead_id, reply_id)
+        except Exception as e:
+            print(f"[patterns] extraction failed for lead #{lead_id}: {e}")
         return
 
     if label == "not_interested":
@@ -191,8 +200,9 @@ def check_inbox_for_replies() -> int:
                 result["from_email"] = from_email
                 result["body"] = body
 
-                # Persist the reply row.
-                db.insert_reply(
+                # Persist the reply row. Capture the new row id so pattern
+                # extraction can reference it as the source reply.
+                reply_id = db.insert_reply(
                     lead_id=lead_id,
                     from_email=from_email,
                     subject=subject,
@@ -217,7 +227,7 @@ def check_inbox_for_replies() -> int:
                 # Dispatch action based on label.
                 lead = db.get_lead(lead_id)
                 if lead:
-                    _dispatch(lead, result)
+                    _dispatch(lead, result, reply_id)
 
                 found += 1
 

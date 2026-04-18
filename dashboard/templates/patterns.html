@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Patterns - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Patterns</h1>
+        <div class="subtitle">
+            Components Claude extracted from emails that got interested replies.
+            Review, approve the ones you want reused, archive the rest.
+        </div>
+    </div>
+</div>
+
+{# ── Status tabs ─────────────────────────────────────────────────── #}
+<div style="display:flex; gap:4px; margin-bottom:14px; border-bottom:1px solid var(--border);">
+    {% set tabs = [('pending','Pending review'), ('approved','Approved'), ('archived','Archived')] %}
+    {% for key, label in tabs %}
+    <a href="{{ url_for('patterns_page', status=key) }}"
+       style="padding:7px 14px; font-size:12px; font-weight:600; border-radius:4px 4px 0 0;
+              text-decoration:none; border:1px solid transparent; margin-bottom:-1px;
+              {% if active_status == key %}
+                background:var(--panel); border-color:var(--border); border-bottom-color:var(--panel); color:var(--text);
+              {% else %}
+                color:var(--text-mute);
+              {% endif %}">
+        {{ label }} <span class="muted" style="margin-left:4px;">({{ counts.get(key, 0) }})</span>
+    </a>
+    {% endfor %}
+</div>
+
+<div class="panel" style="background:transparent; border-left:3px solid var(--blue); margin-bottom:20px;">
+    <div style="font-size:13px; line-height:1.6;">
+        <strong>How this page works.</strong>
+        Every time a lead replies <em>interested</em>, Claude reads the original
+        email and extracts 1-4 reusable components — the opening move, a proof
+        line, a competitor drop, a closing style. They land here as <strong>Pending</strong>.
+        Approve the ones that genuinely represent what worked, and archive the
+        rest. Approved patterns become the source material for future email
+        generation.
+        <br><br>
+        Nothing here yet? That's expected during warmup — patterns only appear
+        after real interested replies land.
+    </div>
+</div>
+
+{% if patterns %}
+
+{% set type_colours = {
+    'opening':          '#FFD700',
+    'proof':            '#57F287',
+    'competitor_drop':  '#ED4245',
+    'close':            '#5865F2',
+    'subject':          '#EB459E',
+    'angle':            '#FEE75C',
+    'other':            '#8899A6'
+} %}
+
+<div style="display:grid; gap:14px;">
+{% for p in patterns %}
+    {% set colour = type_colours.get(p.pattern_type, '#8899A6') %}
+    <div class="panel" style="padding:18px; border-left:3px solid {{ colour }};">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px;">
+            <div style="flex:1;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                    <span style="background:{{ colour }}22; color:{{ colour }};
+                                 border:1px solid {{ colour }}55;
+                                 padding:2px 10px; border-radius:3px; font-size:11px;
+                                 font-weight:600; text-transform:uppercase; letter-spacing:.06em;">
+                        {{ p.pattern_type|replace('_', ' ') }}
+                    </span>
+                    {% if p.source_lead_id %}
+                    <span class="muted" style="font-size:11px;">
+                        from <a href="{{ url_for('lead_detail', lead_id=p.source_lead_id) }}" style="color:var(--text-mute);">
+                            {{ p.source_business_name or ('@' ~ p.source_username) }}
+                        </a>
+                    </span>
+                    {% endif %}
+                    <span class="muted" style="font-size:11px;">
+                        · {{ (p.created_at or '')[:16] }}
+                    </span>
+                </div>
+
+                <div style="font-size:14px; line-height:1.55; color:var(--text);
+                            background:var(--panel); border:1px solid var(--border);
+                            border-radius:4px; padding:12px 14px; margin-bottom:10px;
+                            white-space:pre-wrap; font-style:italic;">
+                    "{{ p.text }}"
+                </div>
+
+                {% if p.reasoning %}
+                <div class="muted" style="font-size:12px; line-height:1.5;">
+                    <strong style="color:var(--text); font-style:normal;">Why Claude thinks it worked:</strong>
+                    {{ p.reasoning }}
+                </div>
+                {% endif %}
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px; min-width:120px;">
+                {% if p.status == 'pending' %}
+                <form method="post" action="{{ url_for('pattern_action', pattern_id=p.id, action='approve') }}">
+                    <input type="hidden" name="return_to" value="{{ url_for('patterns_page', status=active_status) }}">
+                    <button type="submit" class="btn primary" style="width:100%; font-size:12px;">✓ Approve</button>
+                </form>
+                <form method="post" action="{{ url_for('pattern_action', pattern_id=p.id, action='archive') }}">
+                    <input type="hidden" name="return_to" value="{{ url_for('patterns_page', status=active_status) }}">
+                    <button type="submit" class="btn ghost" style="width:100%; font-size:12px;">Archive</button>
+                </form>
+                {% elif p.status == 'approved' %}
+                <form method="post" action="{{ url_for('pattern_action', pattern_id=p.id, action='archive') }}">
+                    <input type="hidden" name="return_to" value="{{ url_for('patterns_page', status=active_status) }}">
+                    <button type="submit" class="btn ghost" style="width:100%; font-size:12px;">Archive</button>
+                </form>
+                {% else %}
+                <form method="post" action="{{ url_for('pattern_action', pattern_id=p.id, action='approve') }}">
+                    <input type="hidden" name="return_to" value="{{ url_for('patterns_page', status=active_status) }}">
+                    <button type="submit" class="btn" style="width:100%; font-size:12px;">Restore</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endfor %}
+</div>
+
+{% else %}
+<div class="panel">
+    <div class="empty-state" style="padding:40px; text-align:center; color:var(--text-mute);">
+        {% if active_status == 'pending' %}
+            No pending patterns. New ones appear automatically when a lead replies 'interested'.
+        {% elif active_status == 'approved' %}
+            No approved patterns yet. Approve some from the Pending tab to start building your pattern library.
+        {% else %}
+            Nothing archived.
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

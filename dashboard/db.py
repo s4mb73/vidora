@@ -136,6 +136,26 @@ CREATE TABLE IF NOT EXISTS suppression_list (
     added_at TEXT DEFAULT CURRENT_TIMESTAMP,
     lead_id INTEGER            -- nullable; link to lead if known
 );
+
+CREATE TABLE IF NOT EXISTS patterns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pattern_type TEXT NOT NULL,           -- opening / proof / competitor_drop / close / subject / angle / other
+    text TEXT NOT NULL,                   -- the extracted line or short block
+    reasoning TEXT,                       -- Claude's short why-it-worked
+    source_lead_id INTEGER,               -- the interested-reply lead this came from
+    source_reply_id INTEGER,              -- replies.id that triggered extraction
+    source_email_subject TEXT,            -- original subject for context
+    source_email_body TEXT,               -- original body for context
+    status TEXT DEFAULT 'pending',        -- pending / approved / archived
+    approved_at TEXT,
+    extractor_model TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (source_lead_id) REFERENCES leads(id) ON DELETE SET NULL,
+    FOREIGN KEY (source_reply_id) REFERENCES replies(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_patterns_status ON patterns(status);
+CREATE INDEX IF NOT EXISTS idx_patterns_type ON patterns(pattern_type);
 """
 
 
@@ -1100,6 +1120,76 @@ def sequence_day_reply_rates() -> list[dict]:
                 "rate": rate,
             })
     return rows
+
+
+# ---------------------------------------------------------------------------
+# Patterns — winning components extracted from interested replies
+# ---------------------------------------------------------------------------
+
+def insert_pattern(
+    pattern_type: str,
+    text: str,
+    reasoning: str,
+    source_lead_id: int | None,
+    source_reply_id: int | None,
+    source_email_subject: str,
+    source_email_body: str,
+    extractor_model: str,
+) -> int:
+    with connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO patterns "
+            "(pattern_type, text, reasoning, source_lead_id, source_reply_id, "
+            " source_email_subject, source_email_body, extractor_model) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (pattern_type, text, reasoning, source_lead_id, source_reply_id,
+             source_email_subject, source_email_body, extractor_model),
+        )
+        return cur.lastrowid
+
+
+def list_patterns(status: str | None = None, limit: int = 200) -> list[dict]:
+    """Patterns joined with source lead info, newest first."""
+    params: list = []
+    where = ""
+    if status:
+        where = "WHERE p.status = ?"
+        params.append(status)
+    with connection() as conn:
+        rows = conn.execute(
+            f"SELECT p.*, l.username AS source_username, "
+            f"       l.business_name AS source_business_name "
+            f"FROM patterns p "
+            f"LEFT JOIN leads l ON l.id = p.source_lead_id "
+            f"{where} "
+            f"ORDER BY p.created_at DESC LIMIT ?",
+            params + [limit],
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def pattern_counts() -> dict:
+    """Counts by status for the Patterns page tabs."""
+    with connection() as conn:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) AS n FROM patterns GROUP BY status"
+        ).fetchall()
+    counts = {r["status"] or "unknown": r["n"] for r in rows}
+    counts["total"] = sum(counts.values())
+    return counts
+
+
+def set_pattern_status(pattern_id: int, status: str) -> None:
+    """Move a pattern between pending / approved / archived."""
+    if status not in ("pending", "approved", "archived"):
+        return
+    with connection() as conn:
+        conn.execute(
+            "UPDATE patterns SET status = ?, "
+            "approved_at = CASE WHEN ? = 'approved' THEN CURRENT_TIMESTAMP ELSE approved_at END "
+            "WHERE id = ?",
+            (status, status, pattern_id),
+        )
 
 
 def action_queue(limit: int = 10) -> dict:
