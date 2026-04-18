@@ -110,6 +110,32 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS replies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lead_id INTEGER NOT NULL,
+    received_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    from_email TEXT,
+    subject TEXT,
+    body TEXT,
+    label TEXT,                -- interested / not_interested / unsubscribe / auto_reply / other
+    confidence REAL,
+    return_date TEXT,          -- ISO date, populated when label = auto_reply
+    classification_model TEXT,
+    reasoning TEXT,
+    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_replies_lead ON replies(lead_id);
+CREATE INDEX IF NOT EXISTS idx_replies_label ON replies(label);
+CREATE INDEX IF NOT EXISTS idx_replies_received ON replies(received_at);
+
+CREATE TABLE IF NOT EXISTS suppression_list (
+    email TEXT PRIMARY KEY,
+    reason TEXT,               -- unsubscribe / bounce / manual
+    added_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    lead_id INTEGER            -- nullable; link to lead if known
+);
 """
 
 
@@ -200,6 +226,7 @@ def _ensure_columns() -> None:
             ("website_analysis", "TEXT"),
             ("competitor_benchmark", "TEXT"),
             ("email_body", "TEXT"),
+            ("last_reply_label", "TEXT"),
         ],
         "outreach_log": [
             ("sequence_day", "INTEGER DEFAULT 1"),
@@ -723,3 +750,151 @@ def sequence_days_sent(lead_id: int) -> set[int]:
             (lead_id,),
         ).fetchall()
     return {r["sequence_day"] for r in rows}
+
+
+def cancel_pending_followups(lead_id: int) -> None:
+    """Mark all pending follow-ups for a lead as cancelled."""
+    with connection() as conn:
+        conn.execute(
+            "UPDATE followup_queue SET status = 'cancelled' "
+            "WHERE lead_id = ? AND status = 'pending'",
+            (lead_id,),
+        )
+
+
+def reschedule_pending_followups(lead_id: int, resume_after: str) -> int:
+    """Push pending follow-ups to resume on/after `resume_after` (ISO date).
+
+    Preserves the original gap between follow-ups: if Day 3 was due on the 10th
+    and Day 7 on the 14th, and we resume on the 20th, Day 3 becomes the 20th
+    and Day 7 becomes the 24th. Returns the number of rows updated.
+    """
+    from datetime import datetime, timedelta
+    try:
+        resume_dt = datetime.fromisoformat(resume_after)
+    except ValueError:
+        return 0
+    updated = 0
+    with connection() as conn:
+        rows = conn.execute(
+            "SELECT id, scheduled_for FROM followup_queue "
+            "WHERE lead_id = ? AND status = 'pending' ORDER BY scheduled_for ASC",
+            (lead_id,),
+        ).fetchall()
+        if not rows:
+            return 0
+        # Anchor the first pending follow-up at resume_dt, then keep original deltas.
+        first_original = datetime.fromisoformat(rows[0]["scheduled_for"])
+        for r in rows:
+            original = datetime.fromisoformat(r["scheduled_for"])
+            delta = original - first_original
+            new_time = (resume_dt + delta).strftime("%Y-%m-%d %H:%M:%S")
+            conn.execute(
+                "UPDATE followup_queue SET scheduled_for = ? WHERE id = ?",
+                (new_time, r["id"]),
+            )
+            updated += 1
+    return updated
+
+
+# ---------------------------------------------------------------------------
+# Replies
+# ---------------------------------------------------------------------------
+
+def insert_reply(
+    lead_id: int,
+    from_email: str,
+    subject: str,
+    body: str,
+    label: str,
+    confidence: float,
+    return_date: str | None,
+    classification_model: str,
+    reasoning: str,
+) -> int:
+    """Store a classified reply. Returns the row id."""
+    with connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO replies "
+            "(lead_id, from_email, subject, body, label, confidence, return_date, "
+            " classification_model, reasoning) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (lead_id, from_email, subject, body, label, confidence, return_date,
+             classification_model, reasoning),
+        )
+        return cur.lastrowid
+
+
+def list_replies(label: str | None = None, limit: int = 200) -> list[dict]:
+    """Return classified replies joined with lead info, newest first."""
+    params: list = []
+    where = ""
+    if label:
+        where = "WHERE r.label = ?"
+        params.append(label)
+    with connection() as conn:
+        rows = conn.execute(
+            f"SELECT r.*, l.username, l.business_name, l.lead_grade "
+            f"FROM replies r LEFT JOIN leads l ON l.id = r.lead_id "
+            f"{where} ORDER BY r.received_at DESC LIMIT ?",
+            params + [limit],
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def reply_exists_for_message(lead_id: int, subject: str, from_email: str) -> bool:
+    """Check if we've already stored a reply with this lead/subject/sender combo.
+
+    Used as a dedup guard so re-running the IMAP scan doesn't double-process.
+    """
+    with connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM replies WHERE lead_id = ? AND subject = ? AND from_email = ? LIMIT 1",
+            (lead_id, subject, from_email),
+        ).fetchone()
+    return row is not None
+
+
+def reply_counts() -> dict:
+    """Counts of replies by label, for dashboard badges."""
+    with connection() as conn:
+        rows = conn.execute(
+            "SELECT label, COUNT(*) AS n FROM replies GROUP BY label"
+        ).fetchall()
+    return {r["label"] or "unknown": r["n"] for r in rows}
+
+
+# ---------------------------------------------------------------------------
+# Suppression list
+# ---------------------------------------------------------------------------
+
+def is_suppressed(email: str) -> bool:
+    if not email:
+        return False
+    with connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM suppression_list WHERE email = ? LIMIT 1",
+            (email.lower().strip(),),
+        ).fetchone()
+    return row is not None
+
+
+def add_suppression(email: str, reason: str, lead_id: int | None = None) -> None:
+    if not email:
+        return
+    with connection() as conn:
+        conn.execute(
+            "INSERT INTO suppression_list (email, reason, lead_id) VALUES (?, ?, ?) "
+            "ON CONFLICT(email) DO UPDATE SET reason = excluded.reason, "
+            "lead_id = COALESCE(excluded.lead_id, suppression_list.lead_id)",
+            (email.lower().strip(), reason, lead_id),
+        )
+
+
+def list_suppressed(limit: int = 500) -> list[dict]:
+    with connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM suppression_list ORDER BY added_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]

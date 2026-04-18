@@ -332,6 +332,22 @@ def create_app() -> Flask:
         )
 
     # -----------------------------------------------------------------------
+    # Replies (classified inbound replies to outreach)
+    # -----------------------------------------------------------------------
+    @app.route("/replies")
+    def replies_page():
+        label = request.args.get("label") or None
+        items = db.list_replies(label=label, limit=500)
+        counts = db.reply_counts()
+        return render_template(
+            "replies.html",
+            replies=items,
+            counts=counts,
+            active_label=label or "",
+            active_page="replies",
+        )
+
+    # -----------------------------------------------------------------------
     # Settings
     # -----------------------------------------------------------------------
     @app.route("/settings", methods=["GET", "POST"])

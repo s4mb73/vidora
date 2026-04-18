@@ -639,6 +639,9 @@ def send_lead_email(lead_id: int, override_email: str = "") -> dict:
     if not to_email:
         return {"ok": False, "message": "No email address saved for this lead."}
 
+    if db.is_suppressed(to_email):
+        return {"ok": False, "message": f"{to_email} is on the suppression list."}
+
     try:
         _check_cap()
     except RuntimeError as e:
@@ -673,6 +676,11 @@ def send_followup(lead_id: int, sequence_day: int, queue_id: int | None = None) 
         if queue_id:
             db.mark_followup(queue_id, "cancelled")
         return {"ok": False, "message": "No email address for this lead."}
+
+    if db.is_suppressed(to_email):
+        if queue_id:
+            db.mark_followup(queue_id, "cancelled")
+        return {"ok": False, "message": f"{to_email} is on the suppression list."}
 
     try:
         _check_cap()

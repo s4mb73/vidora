@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Replies - {{ company_name }}{% endblock %}
+{% block content %}
+
+{# ── Counts bar ─────────────────────────────────────────────────────── #}
+{% set total = counts.values()|sum if counts else 0 %}
+{% set label_defs = [
+    ('interested',     'Interested',     'var(--gold)'),
+    ('not_interested', 'Not interested', 'var(--text-mute)'),
+    ('unsubscribe',    'Unsubscribed',   'var(--red, #ED4245)'),
+    ('auto_reply',     'Auto-reply',     'var(--blue, #5865F2)'),
+    ('other',          'Needs review',   'var(--text)')
+] %}
+<div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px;">
+    {% for key, label, colour in label_defs %}
+    <a href="{{ url_for('replies_page', label=key) }}"
+       class="panel"
+       style="padding:14px 18px; text-align:center; text-decoration:none;
+              {% if active_label == key %}border:1px solid {{ colour }};{% endif %}">
+        <div style="font-size:22px; font-weight:700; color:{{ colour }};">{{ counts.get(key, 0) }}</div>
+        <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">{{ label }}</div>
+    </a>
+    {% endfor %}
+</div>
+
+<div class="page-head">
+    <div>
+        <h1>Replies</h1>
+        <div class="subtitle">
+            {{ replies|length }} classified repl{{ 'y' if replies|length == 1 else 'ies' }}{% if active_label %} — filtered to <strong>{{ active_label }}</strong>{% endif %}.
+            <a href="{{ url_for('replies_page') }}" style="margin-left:8px;">clear filter</a>
+        </div>
+    </div>
+</div>
+
+<div class="panel" style="padding:0;">
+{% if replies %}
+<table class="data">
+    <thead>
+        <tr>
+            <th>Label</th>
+            <th>Lead</th>
+            <th>From</th>
+            <th>Subject</th>
+            <th class="right">Confidence</th>
+            <th>Received</th>
+            <th>Preview</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in replies %}
+    <tr>
+        <td>
+            {% set colour = {
+                'interested':     '#FFD700',
+                'not_interested': '#8899A6',
+                'unsubscribe':    '#ED4245',
+                'auto_reply':     '#5865F2',
+                'other':          '#A0A0A0'
+            }.get(r.label, '#A0A0A0') %}
+            <span style="background:{{ colour }}22; color:{{ colour }}; border:1px solid {{ colour }}55;
+                         padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600;">
+                {{ r.label or 'unknown' }}
+            </span>
+        </td>
+        <td>
+            {% if r.lead_id %}
+            <a href="{{ url_for('lead_detail', lead_id=r.lead_id) }}" class="row-link">
+                @{{ r.username or r.lead_id }}
+            </a>
+            {% if r.business_name %}<div class="muted" style="font-size:11px;">{{ r.business_name }}</div>{% endif %}
+            {% else %}-{% endif %}
+        </td>
+        <td class="muted" style="font-size:12px;">{{ r.from_email }}</td>
+        <td style="font-size:12px;">{{ r.subject or '(no subject)' }}</td>
+        <td class="right num">{{ '%.2f'|format(r.confidence or 0) }}</td>
+        <td class="muted" style="font-size:11px;">
+            {{ r.received_at[:16] if r.received_at else '-' }}
+            {% if r.label == 'auto_reply' and r.return_date %}
+            <div style="font-size:10px;">back {{ r.return_date }}</div>
+            {% endif %}
+        </td>
+        <td class="muted" style="font-size:12px; max-width:420px;">
+            {% set preview = (r.body or '')|trim %}
+            {{ preview[:200] }}{% if preview|length > 200 %}…{% endif %}
+            {% if r.reasoning %}
+            <div style="margin-top:4px; font-size:10px; color:var(--text-mute); font-style:italic;">
+                <!-- classifier said: -->{{ r.reasoning }}
+            </div>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div style="padding:40px; text-align:center; color:var(--text-mute);">
+    No replies yet. Once leads start replying to outreach, they'll appear here classified.
+</div>
+{% endif %}
+</div>
+
+{% endblock %}

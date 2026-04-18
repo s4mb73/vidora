@@ -53,23 +53,49 @@ def _post(payload: dict) -> bool:
 # Notification helpers
 # ---------------------------------------------------------------------------
 
-def notify_reply(lead: dict, from_email: str, preview: str) -> bool:
-    """Fire when a lead replies to an outreach email."""
+def notify_reply_interested(lead: dict, from_email: str, preview: str) -> bool:
+    """Fire for a classified 'interested' reply — the high-signal one."""
     username = lead.get("username") or "unknown"
     biz = lead.get("business_name") or f"@{username}"
     payload = {
         "embeds": [{
-            "title": f"📬 Reply from {biz}",
+            "title": f"🔥 Interested reply — {biz}",
             "description": (
                 f"**Lead:** [@{username}](https://instagram.com/{username})\n"
                 f"**From:** {from_email}\n\n"
                 f"**Preview:**\n> {preview[:300]}"
             ),
             "color": 0xFFD700,  # gold
-            "footer": {"text": "Vidora · Reply detected"},
+            "footer": {"text": "Vidora · Interested reply"},
         }]
     }
     return _post(payload)
+
+
+def notify_reply_other(lead: dict, from_email: str, preview: str, reasoning: str = "") -> bool:
+    """Quieter notification for ambiguous / 'other' replies that need manual review."""
+    username = lead.get("username") or "unknown"
+    biz = lead.get("business_name") or f"@{username}"
+    reason_line = f"**Classifier:** {reasoning}\n\n" if reasoning else ""
+    payload = {
+        "embeds": [{
+            "title": f"📬 Reply (needs review) — {biz}",
+            "description": (
+                f"**Lead:** [@{username}](https://instagram.com/{username})\n"
+                f"**From:** {from_email}\n\n"
+                f"{reason_line}"
+                f"**Preview:**\n> {preview[:300]}"
+            ),
+            "color": 0x8899A6,  # muted grey-blue
+            "footer": {"text": "Vidora · Reply flagged for manual review"},
+        }]
+    }
+    return _post(payload)
+
+
+def notify_reply(lead: dict, from_email: str, preview: str) -> bool:
+    """Back-compat wrapper — routes to the 'interested' notification."""
+    return notify_reply_interested(lead, from_email, preview)
 
 
 def notify_run_complete(run_id: int, leads_found: int, location: str) -> bool:
