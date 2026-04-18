@@ -602,6 +602,15 @@ def extract_email_from_website(website_url: str) -> str | None:
             if _is_good(email):
                 return email.lower()
 
+    # Fallback: info@domain
+    try:
+        from urllib.parse import urlparse
+        netloc = urlparse(website_url).netloc.lower().lstrip("www.")
+        if netloc:
+            return f"info@{netloc}"
+    except Exception:
+        pass
+
     return None
 
 
@@ -1782,7 +1791,73 @@ SUBJECT: [subject line]
 
 [email body]"""
 
-    user_msg = f"AVAILABLE DATA — use what is most striking, ignore the rest:\n{data_block}"
+    # Select hook angle based on lead's weakness profile
+    try:
+        ppw_raw = result.get("posting_frequency") or "0"
+        import re as _re2
+        ppw = float(_re2.search(r"[\d.]+", str(ppw_raw)).group())
+    except Exception:
+        ppw = 0.0
+    try:
+        al = float(result.get("avg_likes") or 0)
+    except Exception:
+        al = 0.0
+    try:
+        ws_n = float(wa.get("website_score") or 10)
+    except Exception:
+        ws_n = 10.0
+    try:
+        fol = int(result.get("followers") or 0)
+    except Exception:
+        fol = 0
+
+    try:
+        reviews_n = int(result.get("maps_review_count") or 0)
+    except Exception:
+        reviews_n = 0
+
+    if ws_n < 5 and fol > 1000:
+        hook_label = "D"
+        hook_hint = (
+            "HOOK D — Decent social, weak website: "
+            "The business has followers and is posting but the website can't convert. "
+            "Open with their social strengths, then contrast with the website gap."
+        )
+    elif reviews_n > 200 and fol < 3000:
+        hook_label = "E"
+        hook_hint = (
+            "HOOK E — Strong offline, small online: "
+            "Impressive Google reviews but very few Instagram followers. "
+            "The credibility is real but almost no one online can see it. "
+            "Open with the review count as proof of quality, then contrast with the tiny online reach."
+        )
+    elif ppw < 1 and al > 50:
+        hook_label = "A"
+        hook_hint = (
+            "HOOK A — Low frequency, decent engagement: "
+            "When they post, people respond — the audience is clearly there. "
+            "Open with the engagement signal as proof the audience exists, "
+            "then point out they're barely feeding it."
+        )
+    elif ppw >= 2 and al < 50:
+        hook_label = "B"
+        hook_hint = (
+            "HOOK B — High frequency, low engagement: "
+            "They're putting in the effort but the content isn't landing. "
+            "Open by acknowledging the posting effort, then surface the engagement gap."
+        )
+    else:
+        hook_label = "C"
+        hook_hint = (
+            "HOOK C — Low everything: "
+            "Strong offline reputation (reviews/rating) but almost invisible online. "
+            "Open with the reputation they've built, then contrast with the silence on social."
+        )
+
+    user_msg = (
+        f"HOOK TO USE: {hook_label}\n{hook_hint}\n\n"
+        f"AVAILABLE DATA — use what is most striking, ignore the rest:\n{data_block}"
+    )
 
     try:
         print(f"  Generating cold email copy...")
@@ -1831,7 +1906,11 @@ def build_prompt(username: str, n: int, location: str = None, profile_stats: dic
     ps = profile_stats or {}
 
     def _fmt(v, suffix=""):
-        return f"{v}{suffix}" if v is not None else "unknown"
+        if v is None:
+            return "unknown"
+        if isinstance(v, float) and v == int(v):
+            v = int(v)
+        return f"{v}{suffix}"
 
     followers        = _fmt(ps.get("followers"))
     following        = _fmt(ps.get("following"))

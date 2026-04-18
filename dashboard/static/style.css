@@ -285,8 +285,8 @@ table.data a.row-link:hover { color: var(--accent); text-decoration: none; }
     font-size: 12px; font-weight: 700;
     letter-spacing: 0;
 }
-.grade.A { background: var(--blue); color: #fff; }
-.grade.B { background: var(--bluem); color: #fff; }
+.grade.A { background: var(--green); color: #fff; }
+.grade.B { background: var(--blue);  color: #fff; }
 .grade.C { background: var(--amber); color: #fff; }
 .grade.D { background: var(--red); color: #fff; }
 .grade.unknown { background: var(--g300); color: #fff; }

@@ -13,3 +13,24 @@ vidora.db
 dashboard/data/
 audits/
 run_*.csv
+
+# Credentials & secrets
+zoho_pass.txt
+zoho_email.txt
+discord_webhook.txt
+.apikey.tmp
+
+# Logs & temp files
+*.log
+batch_log.txt
+mission5_log.txt
+n8n_instructions.txt
+n8n.db-shm
+n8n.db-wal
+logs/
+
+# Test & output CSVs
+leads_*.csv
+test_*.csv
+phase1_results.csv
+debug_ig_source.html

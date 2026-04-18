@@ -150,37 +150,16 @@ def init_db() -> None:
             # Client company
             "client_company": "Vidora Media",
             # Email template parts
-            "email_subject_template": "Our system flagged {business_name}'s Instagram",
+            "email_subject_template": "",
             "email_greeting": "Hi {first_name},",
             "email_intro": "I run Innovite - a content evaluation platform used by media agencies across the UK.",
             "social_proof": "Vidora Media, who work with Premier League footballers, specialise in exactly this.",
             "email_cta": "Audit ready to send - useful?",
             # Follow-up sequence templates
             "followup_day3_subject": "{business_name} - what {competitor_name} are doing differently",
-            "followup_day3_body": (
-                "{business_name} has {maps_review_count} reviews sitting completely unused on Instagram "
-                "while {competitor_name} one mile away is actively converting theirs into bookings.\n\n"
-                "{competitor_name} uses their Story Highlights as a consultation funnel - their Reviews "
-                "highlight turns their Google reputation into social proof that a patient sees before "
-                "they ever send a DM.\n\n"
-                "One restructured bio and a Reviews highlight costs nothing to set up - what determines "
-                "whether patients act on it is the quality of the content sitting behind it.\n\n"
-                "That the piece worth fixing - yes or no?\n\n"
-                "{sender_name}\n{sender_title}\n{sender_website}\n\n"
-                "To opt out reply UNSUBSCRIBE."
-            ),
+            "followup_day3_body": "",
             "followup_day7_subject": "two Manchester {business_type}s - one spot left",
-            "followup_day7_body": (
-                "Taking on two Manchester {business_type}s for production content this month - "
-                "one is confirmed, one spot is still open.\n\n"
-                "{business_name} fits exactly the profile that works: strong offline reputation, "
-                "consistent posting schedule, engagement that hasn't caught up yet.\n\n"
-                "A practice with {maps_review_count} reviews has already done the hard part "
-                "- the content is what's missing.\n\n"
-                "Is that second spot for {business_name} - yes or no?\n\n"
-                "{sender_name}\n{sender_title}\n{sender_website}\n\n"
-                "To opt out reply UNSUBSCRIBE."
-            ),
+            "followup_day7_body": "",
             # PDF WHO WE ARE section
             "who_we_are": (
                 "Innovite is a content intelligence platform used by media production agencies "

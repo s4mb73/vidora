@@ -297,8 +297,19 @@
                     {{ '%.2f'|format(lead.engagement_rate * 100) }}%
                 </dd>
                 {% endif %}
+                {% if lead.avg_likes is not none and lead.avg_likes != '' %}
+                <dt>Avg likes / post</dt>
+                <dd>{{ lead.avg_likes | int if (lead.avg_likes | float) == (lead.avg_likes | int) else lead.avg_likes }}
+                    <span class="muted" style="font-size:11px;">— {{ lead.avg_likes | humanise_eng(lead.followers) }}</span></dd>
+                {% endif %}
+                {% if lead.avg_comments is not none and lead.avg_comments != '' %}
+                <dt>Avg comments / post</dt>
+                <dd>{{ lead.avg_comments | int if (lead.avg_comments | float) == (lead.avg_comments | int) else lead.avg_comments }}</dd>
+                {% endif %}
                 {% if lead.posting_frequency %}
-                <dt>Posting frequency</dt><dd>{{ lead.posting_frequency }}</dd>
+                <dt>Posting frequency</dt>
+                <dd>{{ lead.posting_frequency | humanise_freq }}
+                    <span class="muted" style="font-size:11px;">({{ lead.posting_frequency }})</span></dd>
                 {% endif %}
                 {% if lead.trend %}
                 <dt>Trend</dt>

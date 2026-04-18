@@ -74,6 +74,63 @@ def _check_cap() -> None:
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+def humanise_frequency(raw) -> str:
+    """Convert a raw posts/week value to natural language."""
+    if not raw:
+        return "rarely posting"
+    try:
+        n = float(re.search(r"[\d.]+", str(raw)).group())
+    except (AttributeError, ValueError):
+        return str(raw)
+    if n < 0.2:
+        return "roughly once a fortnight"
+    if n < 0.4:
+        return "once every few weeks"
+    if n < 0.75:
+        return "about once a fortnight"
+    if n < 1.5:
+        return "once a week"
+    if n < 2.5:
+        return "a couple of times a week"
+    if n < 4.5:
+        return f"{int(round(n))} times a week"
+    if n < 6.5:
+        return "almost daily"
+    return "daily"
+
+
+def humanise_engagement(avg_likes, followers=None) -> str:
+    """Convert avg_likes to a natural engagement description.
+
+    Uses engagement rate when followers is provided so 13 likes on 15k followers
+    reads as 'barely any engagement' rather than 'modest'.
+    """
+    try:
+        n = float(avg_likes)
+    except (TypeError, ValueError):
+        return "unknown engagement"
+    if followers:
+        try:
+            er = n / float(followers) * 100
+            if er < 0.5:
+                return "barely any engagement"
+            if er < 1.5:
+                return "modest engagement"
+            if er < 4:
+                return "decent engagement"
+            return "strong engagement"
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+    # Absolute fallback (no follower count available)
+    if n < 10:
+        return "barely any engagement"
+    if n < 50:
+        return "modest engagement"
+    if n < 200:
+        return "decent engagement"
+    return "strong engagement"
+
+
 def _short_name(lead: dict) -> str:
     """Return a short readable business name for use inside email body copy.
 
@@ -119,17 +176,38 @@ def _competitor_name(lead: dict, settings: dict) -> str:
         return comps[0]["business_name"]
     if comps and comps[0].get("username"):
         return "@" + comps[0]["username"]
-    return settings.get("competitor_name_fallback", "a competitor nearby")
+    return settings.get("competitor_name_fallback") or ""
 
 
 def _biz_type(lead: dict) -> str:
-    raw = (lead.get("business_type") or "business").lower().strip()
-    # strip plural if already there, then return base word
-    return raw.rstrip("s")
+    """Return singular form of the business type (e.g. 'clinic', 'salon', 'aesthetics')."""
+    raw = (lead.get("business_type") or "clinic").lower().strip()
+    raw = re.sub(r'\s*\(.*?\)', '', raw).strip()
+    words = raw.split()
+    core = words[-1] if words else "clinic"
+    _already_singular = {"business", "aesthetics", "athletics", "gymnastics", "physics", "logistics"}
+    if core in _already_singular:
+        return core
+    if core.endswith("s") and len(core) > 3:
+        return core[:-1]
+    return core
+
+
+def _biz_type_plural(lead: dict) -> str:
+    """Return the plural form for use in copy (e.g. 'clinics', 'salons', 'businesses')."""
+    singular = _biz_type(lead)
+    _irregular = {"business": "businesses", "aesthetics": "aesthetics"}
+    if singular in _irregular:
+        return _irregular[singular]
+    return singular + "s"
 
 
 def _fmt(value, suffix="", fallback="unknown") -> str:
-    return f"{value}{suffix}" if value is not None else fallback
+    if value is None:
+        return fallback
+    if isinstance(value, float) and value == int(value):
+        value = int(value)
+    return f"{value}{suffix}"
 
 
 def _top_competitor_reviews(lead: dict) -> str:
@@ -179,88 +257,218 @@ def build_subject(lead: dict, settings: dict) -> str:
     # Use Claude-generated subject if available
     if lead.get("email_subject"):
         return lead["email_subject"]
-    tmpl = settings.get(
-        "email_subject_template",
-        "{business_name} - quick question",
-    )
-    return _fill(tmpl, lead, settings)
+    # Use settings template if explicitly set
+    tmpl = settings.get("email_subject_template", "")
+    if tmpl:
+        return _fill(tmpl, lead, settings)
+    # Build a hook-aware subject line
+    biz     = _short_name(lead)
+    hook    = _select_hook(lead)
+    reviews = lead.get("maps_review_count") or ""
+    al_raw  = lead.get("avg_likes")
+    al      = int(al_raw) if isinstance(al_raw, float) and al_raw == int(al_raw) else al_raw
+    pf      = lead.get("posting_frequency") or ""
+    freq    = humanise_frequency(pf) if pf else "barely posting"
+    try:
+        fol = int(lead.get("followers") or 0)
+        fol_str = f"{fol:,}"
+    except (TypeError, ValueError):
+        fol_str = ""
+    try:
+        ws_raw = float(lead.get("website_score") or 0)
+        ws_str = f"{int(ws_raw)}/10" if ws_raw == int(ws_raw) else f"{ws_raw}/10"
+    except (TypeError, ValueError):
+        ws_str = ""
+
+    if hook == "A" and al:
+        return f"{biz} \u2014 {al} likes and {freq}"
+    if hook == "B" and al:
+        return f"{biz} \u2014 {freq}, {al} likes"
+    if hook == "D" and ws_str:
+        return f"{biz} \u2014 {fol_str} followers, {ws_str} website"
+    if hook == "E" and reviews and fol_str:
+        return f"{biz} \u2014 {reviews} reviews, {fol_str} followers"
+    # Hook C and fallback
+    if al is not None and reviews:
+        return f"{biz} \u2014 {reviews} reviews, {al} likes"
+    if reviews:
+        return f"{biz} \u2014 {reviews} reviews"
+    return f"{biz} \u2014 your content"
 
 
 def _posting_context(lead: dict) -> str:
-    """Return a posting frequency string, falling back to mining the weakness text."""
+    """Return a humanised posting frequency string."""
     pf = lead.get("posting_frequency")
     if pf:
-        return f"posting {pf}"
-    # Try to extract from Claude's weakness text e.g. "posting 7 times per week"
-    import re
+        return humanise_frequency(pf)
+    # Fall back to mining weakness text for a raw number
     for w in (lead.get("weaknesses") or []):
-        m = re.search(r'posting\s+(\d+\s+times?\s+(?:per|a)\s+week)', w, re.I)
+        m = re.search(r'posting\s+([\d.]+)\s+times?', w, re.I)
         if m:
-            return f"posting {m.group(1)}"
-    return "posting regularly"
+            return humanise_frequency(m.group(1))
+    return "rarely posting"
 
 
 def _avg_likes_context(lead: dict) -> str:
-    """Return avg likes string, falling back to mining the weakness text."""
+    """Return a humanised engagement description, scaled against follower count."""
+    followers = lead.get("followers")
     al = lead.get("avg_likes")
     if al is not None:
-        return f"averaging just {al} likes per post"
-    import re
+        return humanise_engagement(al, followers)
     for w in (lead.get("weaknesses") or []):
         m = re.search(r'average(?:s)?\s+(?:of\s+)?(?:only\s+)?([\d.]+)\s+likes?\s+per\s+post', w, re.I)
         if m:
-            return f"averaging just {m.group(1)} likes per post"
-    return "getting very little engagement"
+            return humanise_engagement(m.group(1), followers)
+    return "barely any engagement"
+
+
+def _select_hook(lead: dict) -> str:
+    """Return 'A', 'B', 'C', 'D', or 'E' based on the lead's weakness profile."""
+    try:
+        pf_raw = lead.get("posting_frequency") or "0"
+        ppw = float(re.search(r"[\d.]+", str(pf_raw)).group())
+    except (AttributeError, ValueError):
+        ppw = 0.0
+    try:
+        avg_likes = float(lead.get("avg_likes") or 0)
+    except (TypeError, ValueError):
+        avg_likes = 0.0
+    try:
+        ws = float(lead.get("website_score") or
+                   (lead.get("website_analysis") or {}).get("website_score") or 10)
+    except (TypeError, ValueError):
+        ws = 10.0
+    try:
+        followers = int(lead.get("followers") or 0)
+    except (TypeError, ValueError):
+        followers = 0
+    try:
+        reviews = int(lead.get("maps_review_count") or 0)
+    except (TypeError, ValueError):
+        reviews = 0
+
+    # Hook D: decent social, weak website — most specific, check first
+    if ws < 5 and followers > 1000:
+        return "D"
+    # Hook E: strong offline reputation but small online following
+    if reviews > 200 and followers < 3000:
+        return "E"
+    # Hook A: rare posting but audience responds when they do
+    if ppw < 1 and avg_likes > 50:
+        return "A"
+    # Hook B: posting often but content not landing
+    if ppw >= 2 and avg_likes < 50:
+        return "B"
+    # Hook C: low everything (default)
+    return "C"
 
 
 def build_body(lead: dict, settings: dict) -> str:
-    biz          = _short_name(lead)
-    review_count = _fmt(lead.get("maps_review_count"), fallback="hundreds of")
-    rating       = _fmt(lead.get("maps_rating"), fallback="")
-    posting_ctx  = _posting_context(lead)
-    likes_ctx    = _avg_likes_context(lead)
-    comp_name    = _competitor_name(lead, settings)
-
-    greeting     = settings.get("email_greeting", "Hi {first_name},")
-    greeting     = _fill(greeting, lead, settings)
-    intro        = settings.get("email_intro",
-                       "I run Innovite - a content evaluation platform used by media agencies across the UK.")
-    social_proof = settings.get("social_proof",
-                       "We handle content for Premier League footballers and a handful of Manchester clinics.")
-    sender_name    = settings.get("sender_name", "Louis")
-    sender_title   = settings.get("sender_title", "Innovite")
-    sender_website = settings.get("sender_website", "innovite.io")
-    sender_address = settings.get("sender_address", "")
-    address_line   = f"\n{sender_address}" if sender_address else ""
-
     # Use Claude-generated email body if available (from pipeline)
     if lead.get("email_body"):
         return lead["email_body"]
 
-    # Use template if provided, otherwise use hardcoded sequence body
+    # Use settings template if provided
     custom = settings.get("email_body_day1", "").strip()
     if custom:
         return _fill(custom, lead, settings)
 
-    rating_str = f" at {rating} stars" if rating else ""
+    biz          = _short_name(lead)
+    review_count = _fmt(lead.get("maps_review_count"), fallback="hundreds of")
+    rating       = _fmt(lead.get("maps_rating"), fallback="")
+    rating_str   = f" at {rating} stars" if rating else ""
+    posting_ctx  = _posting_context(lead)
+    comp_name    = _competitor_name(lead, settings)
+    social_proof = settings.get("social_proof",
+                       "We produce content for KSI, Premier League footballers and some of the most followed personal brands in the UK. We work with a small number of Manchester businesses we think are ready for that level of production.")
+    sender_name  = settings.get("sender_name", "Louis")
 
-    reviews_line = ""
-    bench = lead.get("competitor_benchmark") or {}
-    top_rev = bench.get("top_competitor_maps_reviews")
+    try:
+        avg_likes_n = float(lead.get("avg_likes") or 0)
+        al_display  = int(avg_likes_n) if avg_likes_n == int(avg_likes_n) else avg_likes_n
+    except (TypeError, ValueError):
+        al_display = None
+
+    try:
+        followers_n = int(lead.get("followers") or 0)
+    except (TypeError, ValueError):
+        followers_n = 0
+
+    try:
+        ws = float(lead.get("website_score") or
+                   (lead.get("website_analysis") or {}).get("website_score") or 0)
+        ws_display = int(ws) if ws == int(ws) else ws
+    except (TypeError, ValueError):
+        ws_display = None
+
+    bench    = lead.get("competitor_benchmark") or {}
+    top_rev  = bench.get("top_competitor_maps_reviews")
     target_rev = lead.get("maps_review_count")
-    if top_rev and target_rev and int(top_rev) > int(target_rev):
-        reviews_line = f" - and they already overtook {biz} on Google reviews ({top_rev} vs {review_count})"
-    elif top_rev:
-        reviews_line = f" - with {top_rev} Google reviews already"
+    if comp_name and top_rev and target_rev and int(top_rev) > int(target_rev):
+        reviews_line = f" \u2014 and they already overtook {biz} on Google reviews ({top_rev} vs {review_count})"
+    elif comp_name and top_rev:
+        reviews_line = f" \u2014 {top_rev} Google reviews and counting"
+    else:
+        reviews_line = ""
 
-    body = (
-        f"With {review_count} Google reviews{rating_str}, {biz} has built the kind of reputation "
-        f"that should have new patients finding you every day - but {posting_ctx} and "
-        f"{likes_ctx}, that reputation is completely invisible to anyone who hasn't already heard of you.\n\n"
+    comp_para = (
         f"{comp_name} is already converting their social presence into consultations because their "
         f"content looks like it costs what their treatments do{reviews_line}.\n\n"
+    ) if comp_name else ""
+
+    hook = _select_hook(lead)
+
+    if hook == "A":
+        # Low frequency, decent engagement — audience is there, just underserved
+        likes_str = f"{al_display} likes" if al_display else "real engagement"
+        para1 = (
+            f"Getting {likes_str} when you do post tells you the audience is there — "
+            f"{biz} just isn't giving them enough to come back for. "
+            f"With {review_count} Google reviews{rating_str} and that kind of response rate, "
+            f"posting {posting_ctx} means most of those followers will never become patients."
+        )
+    elif hook == "B":
+        # High frequency, low engagement — effort without results
+        likes_str = f"{al_display} likes" if al_display else "very few likes"
+        para1 = (
+            f"{biz} is posting {posting_ctx} but averaging {likes_str} — "
+            f"the content isn't landing the way the effort deserves. "
+            f"With {review_count} Google reviews{rating_str}, the reputation is clearly there, "
+            f"but the social presence isn't converting it."
+        )
+    elif hook == "D":
+        # Decent social, weak website — traffic not converting
+        fol_str = f"{followers_n:,}" if followers_n else "a solid following"
+        ws_str  = f"{ws_display}/10" if ws_display is not None else "low"
+        para1 = (
+            f"{biz} is doing the right things on social — {fol_str} followers, "
+            f"posting {posting_ctx} — but the website scores {ws_str} and has no clear "
+            f"way to convert that traffic into bookings. "
+            f"The audience is landing and leaving with nothing to act on."
+        )
+    elif hook == "E":
+        # Strong offline reputation but small online following
+        fol_str = f"{followers_n:,}" if followers_n else "a small following"
+        para1 = (
+            f"{biz} has {review_count} Google reviews{rating_str} — "
+            f"the kind of credibility most practices spend years building. "
+            f"But with only {fol_str} followers online, that reputation isn't reaching "
+            f"the people who haven't already walked through the door."
+        )
+    else:
+        # Hook C — low everything: default
+        para1 = (
+            f"With {review_count} Google reviews{rating_str}, {biz} has built the kind of "
+            f"reputation that should have new patients finding you every day — but posting "
+            f"{posting_ctx} with {_avg_likes_context(lead)}, that reputation is completely "
+            f"invisible to anyone who hasn't already heard of you."
+        )
+
+    body = (
+        f"{para1}\n\n"
+        f"{comp_para}"
         f"{social_proof}\n\n"
-        f"Worth seeing what that looks like for {biz} - yes or no?\n\n"
+        f"Worth seeing what that looks like for {biz} — yes or no?\n\n"
         f"{sender_name}"
     )
     return body
@@ -300,15 +508,26 @@ def build_followup_day3(lead: dict, settings: dict) -> tuple[str, str]:
         review_count = _fmt(lead.get("maps_review_count"), fallback="hundreds of")
         sender_name  = settings.get("sender_name", "Louis")
 
+        if comp_name:
+            comp_para_d3 = (
+                f"{biz} has {review_count} reviews sitting on Google completely invisible on Instagram "
+                f"while {comp_name} is actively converting theirs into bookings.\n\n"
+                f"{comp_name} uses their Story Highlights as a consultation funnel \u2014 their Reviews "
+                f"highlight turns their Google reputation into social proof that a patient sees "
+                f"before they ever send a DM.\n\n"
+            )
+        else:
+            comp_para_d3 = (
+                f"{biz} has {review_count} Google reviews that almost nobody on Instagram "
+                f"ever sees. A clinic with that kind of reputation should be using social proof "
+                f"at every step of the patient journey.\n\n"
+            )
+
         body = (
-            f"{biz} has {review_count} reviews sitting completely unused on Instagram "
-            f"while {comp_name} one mile away is actively converting theirs into bookings.\n\n"
-            f"{comp_name} uses their Story Highlights as a consultation funnel - their Reviews "
-            f"highlight turns their Google reputation into social proof that a patient sees "
-            f"before they ever send a DM.\n\n"
-            f"One restructured bio and a Reviews highlight costs nothing to set up - what "
+            f"{comp_para_d3}"
+            f"One restructured bio and a Reviews highlight costs nothing to set up \u2014 what "
             f"determines whether patients act on it is the quality of the content behind it.\n\n"
-            f"That the piece worth fixing - yes or no?\n\n"
+            f"That's the piece worth fixing \u2014 yes or no?\n\n"
             f"{sender_name}"
         )
     return subject, body
@@ -322,27 +541,53 @@ def build_followup_day7(lead: dict, settings: dict) -> tuple[str, str]:
     """Returns (subject, body)."""
     body_tmpl = settings.get("followup_day7_body", "")
 
-    orig_subj = _original_subject(lead["id"], settings)
-    subject = f"Re: {orig_subj}"
+    comp_name = _competitor_name(lead, settings)
+    if comp_name:
+        subject = f"Re: {comp_name} — last spot this month"
+    else:
+        orig_subj = _original_subject(lead["id"], settings)
+        subject = f"Re: {orig_subj}"
 
     if body_tmpl.strip():
         body = _fill(body_tmpl, lead, settings)
     else:
         biz          = _short_name(lead)
-        biz_type     = _biz_type(lead)
+        biz_type     = _biz_type_plural(lead)
         review_count = _fmt(lead.get("maps_review_count"), fallback="hundreds of")
         rating       = _fmt(lead.get("maps_rating"), fallback="")
         rating_str   = f" and a {rating}-star average" if rating else ""
         sender_name  = settings.get("sender_name", "Louis")
+        hook         = _select_hook(lead)
+
+        # Para 2 adapts so "consistent posting schedule" is never said about a dormant account
+        if hook == "B":
+            profile_line = (
+                f"consistent content output, a strong reputation offline, "
+                f"but engagement numbers that should be higher given the effort going in"
+            )
+        elif hook in ("A", "C"):
+            profile_line = (
+                f"strong offline reputation, an audience that's already there, "
+                f"and a content gap that's straightforward to close"
+            )
+        elif hook == "E":
+            profile_line = (
+                f"reviews that most clinics spend years earning, "
+                f"and an online presence that hasn't caught up with that credibility yet"
+            )
+        else:  # D and fallback
+            profile_line = (
+                f"strong offline reputation, social following that should be converting more, "
+                f"and a clear gap between traffic and bookings"
+            )
 
         body = (
-            f"Taking on two Manchester {biz_type}s for production content this month - "
+            f"Taking on two Manchester {biz_type} for production content this month \u2014 "
             f"one is confirmed, one spot is still open.\n\n"
-            f"{biz} fits exactly the profile that works: strong offline reputation, "
-            f"consistent posting schedule, engagement that hasn't caught up yet.\n\n"
+            f"{biz} fits exactly the profile that works: {profile_line}.\n\n"
             f"A practice with {review_count} reviews{rating_str} has already done the hard part "
-            f"- the content is what's missing.\n\n"
-            f"Is that second spot for {biz} - yes or no?\n\n"
+            f"\u2014 the content is what's missing.\n\n"
+            f"Is that second spot for {biz} \u2014 yes or no?\n\n"
             f"{sender_name}"
         )
     return subject, body

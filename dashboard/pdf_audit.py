@@ -17,6 +17,8 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from .outreach import humanise_frequency
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -467,7 +469,7 @@ def generate_audit(lead: dict, out_dir: Path,
         exec_bullets.append(weaknesses[0])
     else:
         exec_bullets.append(
-            f"{biz_name} is posting at {lead.get('posting_frequency') or 'a very low rate'}, "
+            f"{biz_name} is posting {humanise_frequency(lead.get('posting_frequency'))}, "
             "limiting organic reach and visibility to new patients."
         )
 
@@ -515,7 +517,7 @@ def generate_audit(lead: dict, out_dir: Path,
     ws_str = f"{ws}/10" if ws is not None else "—"
     rating = lead.get("maps_rating") or "—"
     reviews = lead.get("maps_review_count") or "—"
-    pf = lead.get("posting_frequency") or "—"
+    pf = humanise_frequency(lead.get("posting_frequency")) if lead.get("posting_frequency") else "—"
     lpd = (lead.get("last_post_date") or "—")[:10]
 
     overview_data = [
@@ -855,7 +857,7 @@ def generate_audit(lead: dict, out_dir: Path,
     adv_dim  = bench.get("biggest_advantage_dimension")
 
     # Step 1 — content production (always highest priority)
-    posting_str = lead.get("posting_frequency") or "infrequently"
+    posting_str = humanise_frequency(lead.get("posting_frequency")) if lead.get("posting_frequency") else "infrequently"
     steps.append(
         f"Increase production cadence from {posting_str} to a minimum of 3 posts per week using "
         "professionally lit and colour-graded video content. Even a single monthly shoot "

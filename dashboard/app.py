@@ -44,6 +44,9 @@ def create_app() -> Flask:
     outreach.start_scheduler()
     start_monitor()
 
+    app.jinja_env.filters["humanise_freq"] = outreach.humanise_frequency
+    app.jinja_env.filters["humanise_eng"]  = lambda v, followers=None: outreach.humanise_engagement(v, followers)
+
     @app.context_processor
     def inject_globals():
         settings = db.get_settings()
