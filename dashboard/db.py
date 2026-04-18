@@ -190,6 +190,11 @@ def init_db() -> None:
             # offer details. Also injected into the email-generation prompt so
             # Claude writes from an informed position.
             "business_context": "",
+            # Cold-send ramp — when set, outreach.py uses a graduated daily cap
+            # anchored on this date instead of the hardcoded 50/day. Protects
+            # sender reputation by ramping volume gradually after warmup.
+            # Empty string means no ramp (full 50/day cap active).
+            "cold_send_start_date": "",
             # Follow-up sequence templates
             "followup_day3_subject": "{business_name} - what {competitor_name} are doing differently",
             "followup_day3_body": "",
@@ -236,9 +241,11 @@ def _ensure_columns() -> None:
             ("competitor_benchmark", "TEXT"),
             ("email_body", "TEXT"),
             ("last_reply_label", "TEXT"),
+            ("email_prompt_hash", "TEXT"),
         ],
         "outreach_log": [
             ("sequence_day", "INTEGER DEFAULT 1"),
+            ("prompt_hash", "TEXT"),
         ],
     }
     with connection() as conn:
@@ -353,6 +360,7 @@ def upsert_lead_from_pipeline(result: dict) -> int:
         "website_analysis": _to_json(result.get("website_analysis") or {}),
         "competitor_benchmark": _to_json(result.get("competitor_benchmark") or {}),
         "email_body": result.get("email_body"),
+        "email_prompt_hash": result.get("email_prompt_hash"),
     }
 
     cols = list(row.keys())
@@ -584,6 +592,12 @@ def leads_pipeline_stats() -> dict:
     interested_rate = round(interested_week / sent_week * 100) if sent_week else 0
     attempts_today = emails_today + failed_today
     fail_rate_today = round(failed_today / attempts_today * 100) if attempts_today else 0
+    # Current send cap + ramp phase (if cold_send_start_date is set)
+    try:
+        from .outreach import effective_cap_today
+        cap, phase = effective_cap_today()
+    except Exception:
+        cap, phase = 50, "Steady state"
     return {
         "leads_today": today,
         "emails_today": emails_today,
@@ -591,6 +605,8 @@ def leads_pipeline_stats() -> dict:
         "fail_rate_today": fail_rate_today,
         "failed_today": failed_today,
         "best_grade": best["lead_grade"] if best else "-",
+        "send_cap_today": cap,
+        "send_phase": phase,
     }
 
 
@@ -677,13 +693,19 @@ def get_outreach_log(lead_id: int) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def log_outreach(lead_id: int, to_email: str, subject: str, sequence_day: int = 1) -> int:
-    """Create a pending outreach log entry. Returns the log entry id."""
+def log_outreach(lead_id: int, to_email: str, subject: str,
+                 sequence_day: int = 1, prompt_hash: str | None = None) -> int:
+    """Create a pending outreach log entry. Returns the log entry id.
+
+    `prompt_hash` captures the Claude prompt version used to write this email,
+    so later A/B comparisons can group sends by prompt generation.
+    """
     with connection() as conn:
         cur = conn.execute(
-            "INSERT INTO outreach_log (lead_id, to_email, subject, sequence_day, status) "
-            "VALUES (?, ?, ?, ?, 'pending')",
-            (lead_id, to_email, subject, sequence_day),
+            "INSERT INTO outreach_log "
+            "(lead_id, to_email, subject, sequence_day, prompt_hash, status) "
+            "VALUES (?, ?, ?, ?, ?, 'pending')",
+            (lead_id, to_email, subject, sequence_day, prompt_hash),
         )
         return cur.lastrowid
 
@@ -1078,6 +1100,59 @@ def sequence_day_reply_rates() -> list[dict]:
                 "rate": rate,
             })
     return rows
+
+
+def action_queue(limit: int = 10) -> dict:
+    """Three lists of leads that need your attention right now.
+
+    - interested_leads:        replied 'interested' but not yet moved to
+                               qualified/closed — money sitting in the inbox.
+    - resumable_auto_replies:  auto-reply was classified, the stated return
+                               date has passed. Worth a light nudge.
+    - uncontacted_grade_a:     Grade-A leads still at status='new'.
+                               Best leads going stale.
+    """
+    today_iso = datetime.now().date().isoformat()
+    with connection() as conn:
+        interested_leads = [dict(r) for r in conn.execute(
+            "SELECT l.id, l.username, l.business_name, l.business_type, "
+            "       l.lead_grade, MAX(r.received_at) AS last_reply_at "
+            "FROM replies r JOIN leads l ON l.id = r.lead_id "
+            "WHERE r.label = 'interested' "
+            "  AND l.status NOT IN ('qualified', 'closed', 'dead') "
+            "GROUP BY l.id "
+            "ORDER BY last_reply_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()]
+
+        resumable_auto_replies = [dict(r) for r in conn.execute(
+            "SELECT l.id, l.username, l.business_name, l.business_type, "
+            "       l.lead_grade, r.return_date "
+            "FROM replies r JOIN leads l ON l.id = r.lead_id "
+            "WHERE r.label = 'auto_reply' "
+            "  AND r.return_date IS NOT NULL AND r.return_date <= ? "
+            "  AND l.status NOT IN ('replied', 'qualified', 'closed', 'dead') "
+            "GROUP BY l.id "
+            "ORDER BY r.return_date ASC LIMIT ?",
+            (today_iso, limit),
+        ).fetchall()]
+
+        uncontacted_grade_a = [dict(r) for r in conn.execute(
+            "SELECT id, username, business_name, business_type, overall_score, "
+            "       analysed_at "
+            "FROM leads "
+            "WHERE lead_grade = 'A' AND status = 'new' "
+            "ORDER BY overall_score DESC, analysed_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()]
+
+    return {
+        "interested": interested_leads,
+        "resumable_auto_replies": resumable_auto_replies,
+        "uncontacted_grade_a": uncontacted_grade_a,
+        "total": (len(interested_leads) + len(resumable_auto_replies)
+                  + len(uncontacted_grade_a)),
+    }
 
 
 def send_fail_rate_today() -> dict:

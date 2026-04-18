@@ -1920,6 +1920,13 @@ SUBJECT: [subject line]
             result["email_subject"] = subject
         if body:
             result["email_body"] = body
+            # Store a short hash of everything that shaped this email so we
+            # can later query "interested rate for emails written under this
+            # prompt version". Hash covers: full system prompt (which already
+            # embeds voice + business context), selected hook, and model.
+            import hashlib
+            hash_input = f"{system_prompt}||{hook_label}||claude-sonnet-4-6".encode("utf-8")
+            result["email_prompt_hash"] = hashlib.sha256(hash_input).hexdigest()[:12]
         print(f"  Email generated: {subject}")
     except Exception as e:
         print(f"  Email generation failed: {e}")

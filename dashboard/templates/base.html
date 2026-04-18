@@ -27,6 +27,9 @@
             <a href="{{ url_for('replies_page') }}" class="{{ 'active' if active_page == 'replies' else '' }}">
                 <span class="icon">&#9993;</span> Replies
             </a>
+            <a href="{{ url_for('analytics_page') }}" class="{{ 'active' if active_page == 'analytics' else '' }}">
+                <span class="icon">&#9783;</span> Analytics
+            </a>
             <a href="{{ url_for('run') }}" class="{{ 'active' if active_page == 'run' else '' }}">
                 <span class="icon">&#9654;</span> Run pipeline
             </a>

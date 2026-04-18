@@ -4,7 +4,7 @@
 <div class="page-head">
     <div>
         <h1>Overview</h1>
-        <div class="subtitle">Pipeline status and lead health at a glance.</div>
+        <div class="subtitle">What needs your attention right now.</div>
     </div>
     <div class="btn-group">
         <a href="{{ url_for('run') }}" class="btn primary">&#9654; Run pipeline</a>
@@ -12,6 +12,98 @@
     </div>
 </div>
 
+{# ── Action queue ──────────────────────────────────────────────── #}
+<div class="panel">
+    <div class="row-between" style="margin-bottom:12px;">
+        <h2 style="margin:0;">Needs you today</h2>
+        {% if queue.total %}
+        <span class="muted" style="font-size:12px;">{{ queue.total }} item{{ '' if queue.total == 1 else 's' }}</span>
+        {% endif %}
+    </div>
+
+    {% if queue.total == 0 %}
+    <div class="empty-state" style="padding:18px 0; color:var(--text-mute);">
+        Nothing urgent. Interested replies, resumable auto-replies, and uncontacted Grade-A leads will appear here when they do.
+    </div>
+    {% else %}
+
+    {% if queue.interested %}
+    <div style="margin-bottom:16px;">
+        <div style="font-size:11px; font-weight:600; color:#FFD700; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;">
+            🔥 {{ queue.interested|length }} interested repl{{ 'y' if queue.interested|length == 1 else 'ies' }} — respond before they go cold
+        </div>
+        {% for l in queue.interested %}
+        <a href="{{ url_for('lead_detail', lead_id=l.id) }}"
+           style="display:flex; justify-content:space-between; align-items:center;
+                  padding:10px 14px; border:1px solid var(--border); border-radius:4px;
+                  margin-bottom:6px; text-decoration:none; background:#FFD70008;">
+            <div>
+                <strong style="color:var(--text);">{{ l.business_name or '@' ~ l.username }}</strong>
+                <span class="muted" style="margin-left:8px; font-size:12px;">@{{ l.username }}</span>
+                {% if l.business_type %}
+                <span class="muted" style="margin-left:8px; font-size:11px;">· {{ l.business_type }}</span>
+                {% endif %}
+            </div>
+            <div class="muted" style="font-size:11px;">
+                replied {{ (l.last_reply_at or '')[:16] }} &rarr;
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if queue.resumable_auto_replies %}
+    <div style="margin-bottom:16px;">
+        <div style="font-size:11px; font-weight:600; color:#5865F2; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;">
+            ↻ {{ queue.resumable_auto_replies|length }} auto-repl{{ 'y' if queue.resumable_auto_replies|length == 1 else 'ies' }} past return date — nudge?
+        </div>
+        {% for l in queue.resumable_auto_replies %}
+        <a href="{{ url_for('lead_detail', lead_id=l.id) }}"
+           style="display:flex; justify-content:space-between; align-items:center;
+                  padding:10px 14px; border:1px solid var(--border); border-radius:4px;
+                  margin-bottom:6px; text-decoration:none;">
+            <div>
+                <strong style="color:var(--text);">{{ l.business_name or '@' ~ l.username }}</strong>
+                <span class="muted" style="margin-left:8px; font-size:12px;">@{{ l.username }}</span>
+            </div>
+            <div class="muted" style="font-size:11px;">
+                back on {{ l.return_date }} &rarr;
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if queue.uncontacted_grade_a %}
+    <div>
+        <div style="font-size:11px; font-weight:600; color:var(--text); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;">
+            ★ {{ queue.uncontacted_grade_a|length }} Grade-A lead{{ '' if queue.uncontacted_grade_a|length == 1 else 's' }} still uncontacted
+        </div>
+        {% for l in queue.uncontacted_grade_a %}
+        <a href="{{ url_for('lead_detail', lead_id=l.id) }}"
+           style="display:flex; justify-content:space-between; align-items:center;
+                  padding:10px 14px; border:1px solid var(--border); border-radius:4px;
+                  margin-bottom:6px; text-decoration:none;">
+            <div>
+                <span class="grade A" style="margin-right:8px;">A</span>
+                <strong style="color:var(--text);">{{ l.business_name or '@' ~ l.username }}</strong>
+                <span class="muted" style="margin-left:8px; font-size:12px;">@{{ l.username }}</span>
+                {% if l.business_type %}
+                <span class="muted" style="margin-left:8px; font-size:11px;">· {{ l.business_type }}</span>
+                {% endif %}
+            </div>
+            <div class="muted" style="font-size:11px;">
+                score {{ l.overall_score }}/10 &rarr;
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% endif %}
+</div>
+
+{# ── Top-line stats ─────────────────────────────────────────────── #}
 <div class="stat-grid">
     <div class="stat-card">
         <div class="label">Total leads</div>
@@ -29,169 +121,13 @@
         <div class="hint">content quality</div>
     </div>
     <div class="stat-card">
-        <div class="label">Location match</div>
-        <div class="value">{{ stats.location_matches }}</div>
-        <div class="hint">target city signals</div>
-    </div>
-    <div class="stat-card">
         <div class="label">Contacted</div>
         <div class="value">{{ stats.contacted }}</div>
-        <div class="hint">status &ne; new</div>
+        <div class="hint">at least one email sent</div>
     </div>
 </div>
 
-<div class="panel">
-    <h2>Grade distribution</h2>
-    <div class="stat-grid" style="margin-bottom:0;">
-        {% for g in ['A','B','C','D'] %}
-        <div class="stat-card">
-            <div class="label">Grade {{ g }}</div>
-            <div class="value"><span class="grade {{ g }}">{{ g }}</span>
-                <span style="margin-left:10px;">{{ stats.grades[g] }}</span>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-{# ── Reply breakdown + conversion funnel ────────────────────────── #}
-<div class="grid-2">
-    <div class="panel">
-        <div class="row-between" style="margin-bottom:10px;">
-            <h2 style="margin:0;">Replies by label</h2>
-            <a href="{{ url_for('replies_page') }}" class="muted" style="font-size:12px;">view replies</a>
-        </div>
-        {% set rb = reply_breakdown %}
-        {% set rows = [
-            ('interested',     '🔥 Interested',    '#FFD700'),
-            ('not_interested', 'Not interested',   '#8899A6'),
-            ('unsubscribe',    'Unsubscribed',     '#ED4245'),
-            ('auto_reply',     'Auto-reply',       '#5865F2'),
-            ('other',          'Needs review',     '#A0A0A0')
-        ] %}
-        <table class="data">
-            <thead>
-                <tr>
-                    <th>Label</th>
-                    <th class="right">This week</th>
-                    <th class="right">All time</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for key, label, colour in rows %}
-            <tr>
-                <td>
-                    <span style="color:{{ colour }}; font-weight:600;">{{ label }}</span>
-                </td>
-                <td class="right num">{{ rb.week[key] }}</td>
-                <td class="right num muted">{{ rb.all_time[key] }}</td>
-            </tr>
-            {% endfor %}
-            <tr style="border-top:1px solid var(--border);">
-                <td style="font-weight:600;">Total replies</td>
-                <td class="right num" style="font-weight:700;">{{ rb.week.total }}</td>
-                <td class="right num muted">{{ rb.all_time.total }}</td>
-            </tr>
-            <tr>
-                <td class="muted" style="font-size:11px;">Interested rate</td>
-                <td class="right num gold">{{ rb.interested_rate_week }}%</td>
-                <td class="right num muted">{{ rb.interested_rate_all }}%</td>
-            </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="panel">
-        <h2 style="margin:0 0 10px 0;">Conversion funnel</h2>
-        {% set f = funnel %}
-        {% set steps = [
-            ('Leads analysed',    f.analysed,   None,                  None),
-            ('Contacted (Day 1)', f.contacted,  f.contacted_rate,      'of analysed'),
-            ('Any reply',         f.any_reply,  f.reply_rate,          'of contacted'),
-            ('Interested',        f.interested, f.interested_of_contacted, 'of contacted')
-        ] %}
-        {% set maxv = (f.analysed or 1) %}
-        <div style="display:flex; flex-direction:column; gap:10px;">
-            {% for label, count, rate, rate_of in steps %}
-            {% set width = (count / maxv * 100) if maxv else 0 %}
-            <div>
-                <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
-                    <span>{{ label }}</span>
-                    <span class="muted">
-                        <strong style="color:var(--text);">{{ count }}</strong>
-                        {% if rate is not none %} · {{ rate }}% {{ rate_of }}{% endif %}
-                    </span>
-                </div>
-                <div style="background:var(--border); height:10px; border-radius:3px; overflow:hidden;">
-                    <div style="width:{{ width }}%; height:100%;
-                                background:{% if loop.last %}var(--gold){% else %}var(--blue, #5865F2){% endif %};"></div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        <div class="muted" style="font-size:11px; margin-top:14px;">
-            Counts unique leads at each stage, all time.
-        </div>
-    </div>
-</div>
-
-{# ── Per-grade + per-sequence-day ───────────────────────────────── #}
-<div class="grid-2">
-    <div class="panel">
-        <h2 style="margin:0 0 10px 0;">Interested rate by grade</h2>
-        <table class="data">
-            <thead>
-                <tr>
-                    <th>Grade</th>
-                    <th class="right">Contacted</th>
-                    <th class="right">Interested</th>
-                    <th class="right">Rate</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for row in grade_table %}
-            <tr>
-                <td><span class="grade {{ row.grade }}">{{ row.grade }}</span></td>
-                <td class="right num">{{ row.contacted }}</td>
-                <td class="right num">{{ row.interested }}</td>
-                <td class="right num {{ 'gold' if row.rate >= 10 else '' }}">{{ row.rate }}%</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        <div class="muted" style="font-size:11px; margin-top:10px;">
-            If A doesn't beat B/C/D, the scoring prompt needs tuning.
-        </div>
-    </div>
-
-    <div class="panel">
-        <h2 style="margin:0 0 10px 0;">Reply rate by sequence day</h2>
-        <table class="data">
-            <thead>
-                <tr>
-                    <th>Sequence</th>
-                    <th class="right">Sent</th>
-                    <th class="right">Replies</th>
-                    <th class="right">Rate</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for row in seq_rates %}
-            <tr>
-                <td>Day {{ row.day }}</td>
-                <td class="right num">{{ row.sent }}</td>
-                <td class="right num">{{ row.replies }}</td>
-                <td class="right num {{ 'gold' if row.rate >= 5 else '' }}">{{ row.rate }}%</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        <div class="muted" style="font-size:11px; margin-top:10px;">
-            If Day 7 rate drops below ~1%, consider trimming the sequence.
-        </div>
-    </div>
-</div>
-
+{# ── Top scoring + recent runs ──────────────────────────────────── #}
 <div class="grid-2">
     <div class="panel">
         <div class="row-between" style="margin-bottom:10px;">
@@ -218,62 +154,39 @@
         {% endif %}
     </div>
 
+    {% if runs %}
     <div class="panel">
         <div class="row-between" style="margin-bottom:10px;">
-            <h2 style="margin:0;">Recent activity</h2>
-            <a href="{{ url_for('leads', order='analysed_at DESC') }}" class="muted" style="font-size:12px;">view all</a>
+            <h2 style="margin:0;">Recent runs</h2>
+            <a href="{{ url_for('run') }}" class="muted" style="font-size:12px;">all runs</a>
         </div>
-        {% if recent %}
         <table class="data">
-            <thead><tr><th>Lead</th><th>When</th><th class="right">Grade</th></tr></thead>
+            <thead><tr><th>#</th><th>When</th><th class="right">Found</th><th>Status</th></tr></thead>
             <tbody>
-            {% for l in recent %}
+            {% for r in runs %}
             <tr>
-                <td><a href="{{ url_for('lead_detail', lead_id=l.id) }}" class="row-link">@{{ l.username }}</a></td>
-                <td class="muted">{{ l.analysed_at or l.created_at }}</td>
-                <td class="right"><span class="grade {{ l.lead_grade or 'unknown' }}">{{ l.lead_grade or '?' }}</span></td>
+                <td><a href="{{ url_for('run_detail', run_id=r.id) }}" class="row-link">#{{ r.id }}</a></td>
+                <td class="muted">{{ r.started_at }}</td>
+                <td class="right num gold">{{ r.leads_found }}</td>
+                <td>
+                    {% if r.status == 'running' %}
+                        <span class="running-indicator"><span class="pulse"></span> running</span>
+                    {% elif r.status == 'success' %}
+                        <span class="badge" style="color:var(--green); border-color:var(--green);">success</span>
+                    {% else %}
+                        <span class="badge" style="color:var(--red); border-color:var(--red);">{{ r.status }}</span>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <div class="empty-state">Nothing analysed yet.</div>
-        {% endif %}
     </div>
+    {% endif %}
 </div>
 
-{% if runs %}
-<div class="panel">
-    <h2>Recent runs</h2>
-    <table class="data">
-        <thead>
-            <tr>
-                <th>#</th><th>Started</th><th>Finished</th>
-                <th>Location</th><th>Target</th><th>Found</th><th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for r in runs %}
-        <tr>
-            <td><a href="{{ url_for('run_detail', run_id=r.id) }}" class="row-link">#{{ r.id }}</a></td>
-            <td class="muted">{{ r.started_at }}</td>
-            <td class="muted">{{ r.finished_at or '-' }}</td>
-            <td>{{ r.location or '-' }}</td>
-            <td class="num">{{ r.leads_target }}</td>
-            <td class="num gold">{{ r.leads_found }}</td>
-            <td>
-                {% if r.status == 'running' %}
-                    <span class="running-indicator"><span class="pulse"></span> running</span>
-                {% elif r.status == 'success' %}
-                    <span class="badge" style="color:var(--green); border-color:var(--green);">success</span>
-                {% else %}
-                    <span class="badge" style="color:var(--red); border-color:var(--red);">{{ r.status }}</span>
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+<div class="muted" style="font-size:12px; margin-top:20px;">
+    Looking for charts and breakdowns? Head to <a href="{{ url_for('analytics_page') }}">Analytics</a>.
 </div>
-{% endif %}
+
 {% endblock %}

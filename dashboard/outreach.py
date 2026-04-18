@@ -27,7 +27,16 @@ from . import db
 
 ZOHO_HOST = "smtp.zoho.eu"
 ZOHO_PORT = 465
-DAILY_CAP = 50
+STEADY_STATE_CAP = 50
+
+# Default ramp when `cold_send_start_date` is set: (day_from, day_to_inclusive, cap).
+# day_to = None means "forever from day_from onwards".
+DEFAULT_RAMP = (
+    (1, 3,  10),
+    (4, 7,  20),
+    (8, 14, 35),
+    (15, None, STEADY_STATE_CAP),
+)
 
 CRED_EMAIL = Path("C:/vidora/zoho_email.txt")
 CRED_PASS  = Path("C:/vidora/zoho_pass.txt")
@@ -61,11 +70,38 @@ def _sent_today() -> int:
     return row["n"] if row else 0
 
 
+def effective_cap_today() -> tuple[int, str]:
+    """Return (cap, phase_label) for today.
+
+    If `cold_send_start_date` is set, walks the ramp schedule to find the
+    phase matching "days since start". Otherwise returns the steady-state cap.
+    """
+    start = (db.get_setting("cold_send_start_date") or "").strip()
+    if not start:
+        return STEADY_STATE_CAP, "Steady state"
+    try:
+        start_date = date.fromisoformat(start)
+    except ValueError:
+        return STEADY_STATE_CAP, "Steady state (invalid start date)"
+    day_n = (date.today() - start_date).days + 1  # day 1 = start_date itself
+    if day_n < 1:
+        return 0, f"Ramp starts {start_date.isoformat()}"
+    for day_from, day_to, cap in DEFAULT_RAMP:
+        if day_to is None and day_n >= day_from:
+            return cap, "Steady state"
+        if day_to is not None and day_from <= day_n <= day_to:
+            return cap, f"Ramp day {day_n} of {day_to}"
+    return STEADY_STATE_CAP, "Steady state"
+
+
 def _check_cap() -> None:
+    cap, phase = effective_cap_today()
+    if cap <= 0:
+        raise RuntimeError(f"Sending paused: {phase}.")
     sent = _sent_today()
-    if sent >= DAILY_CAP:
+    if sent >= cap:
         raise RuntimeError(
-            f"Daily send cap reached ({DAILY_CAP}/day). "
+            f"Daily cap reached ({cap}/day — {phase}). "
             f"{sent} emails already sent today."
         )
 
@@ -614,7 +650,12 @@ def _send_smtp(from_email: str, password: str, to_email: str, subject: str, body
 def _do_send(lead_id: int, to_email: str, subject: str, body: str,
              sequence_day: int) -> dict:
     """Internal send — logs result, returns {ok, message}."""
-    log_id = db.log_outreach(lead_id, to_email, subject, sequence_day)
+    # Copy the lead's prompt_hash onto the outreach_log row so A/B
+    # comparisons can group sends by the prompt version that wrote them.
+    lead = db.get_lead(lead_id) or {}
+    prompt_hash = lead.get("email_prompt_hash") if sequence_day == 1 else None
+    log_id = db.log_outreach(lead_id, to_email, subject,
+                             sequence_day=sequence_day, prompt_hash=prompt_hash)
     try:
         from_email, password = _load_creds()
         _send_smtp(from_email, password, to_email, subject, body)

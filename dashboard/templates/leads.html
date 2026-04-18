@@ -10,8 +10,13 @@
         <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">Leads today</div>
     </div>
     <div class="panel" style="padding:14px 18px; text-align:center;">
-        <div style="font-size:22px; font-weight:700; color:var(--blue);">{{ ps.emails_today or 0 }}</div>
-        <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">Emails sent today</div>
+        <div style="font-size:22px; font-weight:700; color:var(--blue);">{{ ps.emails_today or 0 }}<span style="font-size:14px; color:var(--text-mute);"> / {{ ps.send_cap_today or 50 }}</span></div>
+        <div style="font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:.08em; margin-top:2px;">
+            Emails today
+            {% if ps.send_phase and 'Steady' not in ps.send_phase %}
+            <div style="font-size:10px; text-transform:none; letter-spacing:0; color:var(--gold); margin-top:2px;">{{ ps.send_phase }}</div>
+            {% endif %}
+        </div>
     </div>
     <div class="panel" style="padding:14px 18px; text-align:center;">
         <div style="font-size:22px; font-weight:700; color:{% if (ps.interested_rate or 0) >= 5 %}var(--green){% else %}var(--gold){% endif %};">{{ ps.interested_rate or 0 }}%</div>

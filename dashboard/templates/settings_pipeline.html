@@ -27,6 +27,25 @@
     </div>
 
     <div class="panel">
+        <h2>Cold-send ramp</h2>
+        <div class="form-hint" style="margin-bottom:12px;">
+            After inbox warmup, the first few days of real sending should ramp up
+            gradually — filters punish sudden volume spikes. Set a start date
+            below and the daily cap will follow the schedule: <strong>10 → 20 → 35 → 50</strong>
+            over days 1–3 / 4–7 / 8–14 / 15+. Leave blank to send at the full
+            50/day cap immediately.
+        </div>
+        <div class="form-group">
+            <label>Cold-send start date (first day real outbound resumes)</label>
+            <input type="date" name="cold_send_start_date" value="{{ settings.cold_send_start_date }}">
+            <div class="form-hint">
+                Typically the day your inbox warmup finishes. Leave empty if
+                you're not ramping (e.g. Lemlist already smooths your sending).
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
         <h2>Branding</h2>
         <div class="form-hint" style="margin-bottom:12px;">
             Shown in the dashboard sidebar and on PDF audit reports. Not sent in emails.

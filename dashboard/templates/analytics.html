@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Analytics - {{ company_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Analytics</h1>
+        <div class="subtitle">How outreach is performing. Retrospective data — not what needs you today.</div>
+    </div>
+</div>
+
+{# ── Reply breakdown + conversion funnel ────────────────────────── #}
+<div class="grid-2">
+    <div class="panel">
+        <div class="row-between" style="margin-bottom:10px;">
+            <h2 style="margin:0;">Replies by label</h2>
+            <a href="{{ url_for('replies_page') }}" class="muted" style="font-size:12px;">view replies</a>
+        </div>
+        {% set rb = reply_breakdown %}
+        {% set rows = [
+            ('interested',     '🔥 Interested',    '#FFD700'),
+            ('not_interested', 'Not interested',   '#8899A6'),
+            ('unsubscribe',    'Unsubscribed',     '#ED4245'),
+            ('auto_reply',     'Auto-reply',       '#5865F2'),
+            ('other',          'Needs review',     '#A0A0A0')
+        ] %}
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Label</th>
+                    <th class="right">This week</th>
+                    <th class="right">All time</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for key, label, colour in rows %}
+            <tr>
+                <td><span style="color:{{ colour }}; font-weight:600;">{{ label }}</span></td>
+                <td class="right num">{{ rb.week[key] }}</td>
+                <td class="right num muted">{{ rb.all_time[key] }}</td>
+            </tr>
+            {% endfor %}
+            <tr style="border-top:1px solid var(--border);">
+                <td style="font-weight:600;">Total replies</td>
+                <td class="right num" style="font-weight:700;">{{ rb.week.total }}</td>
+                <td class="right num muted">{{ rb.all_time.total }}</td>
+            </tr>
+            <tr>
+                <td class="muted" style="font-size:11px;">Interested rate</td>
+                <td class="right num gold">{{ rb.interested_rate_week }}%</td>
+                <td class="right num muted">{{ rb.interested_rate_all }}%</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="panel">
+        <h2 style="margin:0 0 10px 0;">Conversion funnel</h2>
+        {% set f = funnel %}
+        {% set steps = [
+            ('Leads analysed',    f.analysed,   None,                  None),
+            ('Contacted (Day 1)', f.contacted,  f.contacted_rate,      'of analysed'),
+            ('Any reply',         f.any_reply,  f.reply_rate,          'of contacted'),
+            ('Interested',        f.interested, f.interested_of_contacted, 'of contacted')
+        ] %}
+        {% set maxv = (f.analysed or 1) %}
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            {% for label, count, rate, rate_of in steps %}
+            {% set width = (count / maxv * 100) if maxv else 0 %}
+            <div>
+                <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                    <span>{{ label }}</span>
+                    <span class="muted">
+                        <strong style="color:var(--text);">{{ count }}</strong>
+                        {% if rate is not none %} · {{ rate }}% {{ rate_of }}{% endif %}
+                    </span>
+                </div>
+                <div style="background:var(--border); height:10px; border-radius:3px; overflow:hidden;">
+                    <div style="width:{{ width }}%; height:100%;
+                                background:{% if loop.last %}var(--gold){% else %}var(--blue, #5865F2){% endif %};"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="muted" style="font-size:11px; margin-top:14px;">
+            Counts unique leads at each stage, all time.
+        </div>
+    </div>
+</div>
+
+{# ── Per-grade + per-sequence-day ───────────────────────────────── #}
+<div class="grid-2">
+    <div class="panel">
+        <h2 style="margin:0 0 10px 0;">Interested rate by grade</h2>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Grade</th>
+                    <th class="right">Contacted</th>
+                    <th class="right">Interested</th>
+                    <th class="right">Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in grade_table %}
+            <tr>
+                <td><span class="grade {{ row.grade }}">{{ row.grade }}</span></td>
+                <td class="right num">{{ row.contacted }}</td>
+                <td class="right num">{{ row.interested }}</td>
+                <td class="right num {{ 'gold' if row.rate >= 10 else '' }}">{{ row.rate }}%</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <div class="muted" style="font-size:11px; margin-top:10px;">
+            If A doesn't beat B/C/D, the scoring prompt needs tuning.
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2 style="margin:0 0 10px 0;">Reply rate by sequence day</h2>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Sequence</th>
+                    <th class="right">Sent</th>
+                    <th class="right">Replies</th>
+                    <th class="right">Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in seq_rates %}
+            <tr>
+                <td>Day {{ row.day }}</td>
+                <td class="right num">{{ row.sent }}</td>
+                <td class="right num">{{ row.replies }}</td>
+                <td class="right num {{ 'gold' if row.rate >= 5 else '' }}">{{ row.rate }}%</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <div class="muted" style="font-size:11px; margin-top:10px;">
+            If Day 7 rate drops below ~1%, consider trimming the sequence.
+        </div>
+    </div>
+</div>
+
+{% endblock %}

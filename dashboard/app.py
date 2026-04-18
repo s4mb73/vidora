@@ -64,24 +64,31 @@ def create_app() -> Flask:
     @app.route("/")
     def home():
         stats = db.dashboard_stats()
-        recent = db.list_leads(order_by="analysed_at DESC", limit=8)
         top = db.list_leads(order_by="overall_score DESC", limit=5)
         runs = db.list_runs(limit=5)
+        queue = db.action_queue()
+        return render_template(
+            "home.html",
+            stats=stats,
+            top=top,
+            runs=runs,
+            queue=queue,
+            active_page="home",
+        )
+
+    @app.route("/analytics")
+    def analytics_page():
         reply_breakdown = db.reply_label_breakdown()
         funnel = db.conversion_funnel()
         grade_table = db.grade_conversion()
         seq_rates = db.sequence_day_reply_rates()
         return render_template(
-            "home.html",
-            stats=stats,
-            recent=recent,
-            top=top,
-            runs=runs,
+            "analytics.html",
             reply_breakdown=reply_breakdown,
             funnel=funnel,
             grade_table=grade_table,
             seq_rates=seq_rates,
-            active_page="home",
+            active_page="analytics",
         )
 
     # -----------------------------------------------------------------------
@@ -470,7 +477,7 @@ def create_app() -> Flask:
         if request.method == "POST":
             _save_fields(
                 ("company_name", "company_tagline", "default_location",
-                 "default_leads_per_run"),
+                 "default_leads_per_run", "cold_send_start_date"),
                 dest="pipeline",
             )
             return redirect(url_for("settings_pipeline"))
