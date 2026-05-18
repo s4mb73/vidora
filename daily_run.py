@@ -116,6 +116,16 @@ def main() -> None:
         _log(f"ERROR running pipeline: {e}")
         sys.exit(1)
 
+    # Drain any pending Innovite bridge pushes. No-op unless the bridge
+    # env vars are set; safe to call regardless.
+    try:
+        sys.path.insert(0, str(VIDORA_DIR))
+        from dashboard import bridge
+        result = bridge.drain_pending()
+        _log(f"Bridge drain: {result}")
+    except Exception as e:
+        _log(f"Bridge drain error (non-fatal): {e}")
+
     _log("=== Daily run complete ===")
 
 

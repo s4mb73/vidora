@@ -398,6 +398,16 @@ def upsert_lead_from_pipeline(result: dict) -> int:
         lead_id = conn.execute(
             "SELECT id FROM leads WHERE username = ?", (row["username"],)
         ).fetchone()["id"]
+
+    # Fire-and-forget push to Innovite CRM. No-op unless both
+    # VIDORA_BRIDGE_SECRET + INNOVITE_API_URL are set. NEVER raises
+    # (failures are queued in pending_pushes for retry by daily_run).
+    try:
+        from dashboard import bridge
+        bridge.push_lead(lead_id)
+    except Exception:
+        pass
+
     return lead_id
 
 
